@@ -1,6 +1,4 @@
 import { motion } from "framer-motion";
-import { ShoppingCart, CreditCard, Smartphone, Shield, ArrowRight } from "lucide-react";
-import { GlassCard } from "@/components/ui/GlassCard";
 import paypayLogo from "@/assets/paypay-logo.webp";
 import multicaixaLogo from "@/assets/multicaixa-logo.webp";
 import pliqpagLogo from "@/assets/pliqpag-logo.png";
@@ -10,81 +8,80 @@ const paymentMethods = [
     logo: multicaixaLogo,
     name: "Multicaixa Express",
     description: "Pagamento instantâneo via Multicaixa Express",
-    color: "bg-orange-500/10"
   },
   {
     logo: paypayLogo,
     name: "PayPay África",
     description: "Transferências rápidas com PayPay",
-    color: "bg-cyan-500/10"
   },
   {
     logo: pliqpagLogo,
     name: "PliqPag",
     description: "Pagamentos seguros via referência",
-    color: "bg-emerald-500/10"
   },
 ];
 
 export const PaymentMethodsSection = () => {
   return (
-    <section className="py-24 bg-secondary/50">
-      <div className="container mx-auto px-4">
+    <section className="py-28 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-b from-secondary/20 to-background" />
+      
+      <div className="container mx-auto px-4 relative z-10">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           className="text-center mb-16"
         >
-          <h2 className="font-display text-3xl md:text-5xl font-bold text-foreground mb-4">
-            Métodos de <span className="text-primary">Pagamento</span>
+          <h2 className="font-display text-4xl md:text-5xl font-extrabold text-foreground mb-5 tracking-tight">
+            Métodos de{" "}
+            <span className="bg-gradient-to-r from-primary to-orange-400 bg-clip-text text-transparent">
+              Pagamento
+            </span>
           </h2>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Utilizamos os principais métodos de pagamento de Angola para sua conveniência.
+            Utilizamos os principais métodos de pagamento de Angola.
           </p>
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-          {paymentMethods.map((method, index) => {
-            return (
-              <GlassCard
-                key={index}
-                hover
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
-                className="text-center bg-white border-border"
-              >
-                <div className={`w-16 h-16 rounded-2xl ${method.color} flex items-center justify-center mx-auto mb-4 p-2`}>
-                  <img src={method.logo} alt={method.name} className="w-full h-full object-contain" />
-                </div>
-                <h3 className="font-display text-xl font-semibold text-foreground mb-2">
-                  {method.name}
-                </h3>
-                <p className="text-muted-foreground text-sm">
-                  {method.description}
-                </p>
-              </GlassCard>
-            );
-          })}
+          {paymentMethods.map((method, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.12 }}
+              whileHover={{ y: -6, transition: { duration: 0.3 } }}
+              className="liquid-glass rounded-3xl p-8 text-center group cursor-default"
+            >
+              <div className="w-20 h-20 rounded-2xl liquid-glass flex items-center justify-center mx-auto mb-5 p-3 group-hover:shadow-lg transition-shadow">
+                <img src={method.logo} alt={method.name} className="w-full h-full object-contain" />
+              </div>
+              <h3 className="font-display text-xl font-bold text-foreground mb-2 group-hover:text-primary transition-colors">
+                {method.name}
+              </h3>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                {method.description}
+              </p>
+            </motion.div>
+          ))}
         </div>
 
-        {/* Security Badge */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.4 }}
-          className="flex items-center justify-center gap-6 mt-12"
+          className="flex items-center justify-center gap-8 mt-14"
         >
           <div className="flex items-center gap-2 text-muted-foreground">
-            <Shield size={20} className="text-primary" />
-            <span className="text-sm font-medium">Pagamentos 100% Seguros</span>
+            <span className="text-lg">🔒</span>
+            <span className="text-sm font-semibold">Pagamentos 100% Seguros</span>
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
-            <CreditCard size={20} className="text-primary" />
-            <span className="text-sm font-medium">Verificação KYC</span>
+            <span className="text-lg">✅</span>
+            <span className="text-sm font-semibold">Verificação KYC</span>
           </div>
         </motion.div>
       </div>

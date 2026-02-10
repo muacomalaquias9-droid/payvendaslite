@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Mail, Lock, ArrowRight, Loader2, Shield, Globe } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,40 +19,49 @@ const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
     try {
       await signIn(email, password);
       navigate("/trading");
     } catch (error) {
-      // Error is handled in useAuth
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-secondary/30 flex relative overflow-hidden">
-      {/* Background effects */}
-      <div className="absolute top-0 left-0 w-full h-full">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-primary/10 rounded-full blur-3xl" />
-      </div>
+    <div className="min-h-screen flex relative overflow-hidden">
+      {/* Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-background via-secondary/20 to-primary/5" />
+      
+      {/* Floating orbs */}
+      <motion.div 
+        animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
+        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full"
+        style={{ background: "radial-gradient(circle, hsl(var(--primary) / 0.08) 0%, transparent 70%)" }}
+      />
+      <motion.div 
+        animate={{ x: [0, -20, 0], y: [0, 30, 0] }}
+        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute bottom-1/4 right-1/4 w-64 h-64 rounded-full"
+        style={{ background: "radial-gradient(circle, hsl(var(--primary) / 0.12) 0%, transparent 70%)" }}
+      />
 
-      {/* Left side - Branding (hidden on mobile) */}
+      {/* Left - Branding */}
       <div className="hidden lg:flex flex-1 items-center justify-center relative">
         <div className="text-center max-w-md px-8">
           <motion.img 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
             src={payvendasLogo} 
             alt="PayVendas" 
-            className="h-20 mx-auto mb-8" 
+            className="h-20 mx-auto mb-10" 
           />
           <motion.h2 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-3xl font-display font-bold text-foreground mb-4"
+            className="text-4xl font-display font-extrabold text-foreground mb-5 tracking-tight"
           >
             Vende seus e-books e factura mais
           </motion.h2>
@@ -60,46 +69,43 @@ const Login = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="text-muted-foreground text-lg"
+            className="text-muted-foreground text-lg leading-relaxed"
           >
             Aceda à sua conta e comece a vender seus conteúdos digitais.
           </motion.p>
           
-          {/* Trust indicators */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="flex items-center justify-center gap-6 mt-12"
+            className="flex items-center justify-center gap-6 mt-14"
           >
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Shield size={18} className="text-primary" />
-              <span className="text-sm">Seguro</span>
+            <div className="flex items-center gap-2 text-muted-foreground liquid-glass rounded-full px-4 py-2">
+              <span>🔐</span>
+              <span className="text-sm font-semibold">Seguro</span>
             </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Globe size={18} className="text-primary" />
-              <span className="text-sm">Angola & Moçambique</span>
+            <div className="flex items-center gap-2 text-muted-foreground liquid-glass rounded-full px-4 py-2">
+              <span>🌍</span>
+              <span className="text-sm font-semibold">Angola & Moçambique</span>
             </div>
           </motion.div>
         </div>
       </div>
 
-      {/* Right side - Login form */}
+      {/* Right - Login form */}
       <div className="flex-1 flex items-center justify-center px-6 py-12 relative z-10">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           className="w-full max-w-md"
         >
-          {/* Mobile logo */}
-          <div className="lg:hidden mb-8 text-center">
+          <div className="lg:hidden mb-10 text-center">
             <img src={payvendasLogo} alt="PayVendas" className="h-16 mx-auto" />
           </div>
 
-          {/* Card container */}
-          <div className="bg-white/90 backdrop-blur-xl border border-border/50 rounded-2xl p-8 shadow-xl">
+          <div className="liquid-glass rounded-3xl p-8">
             <div className="text-center mb-8">
-              <h1 className="font-display text-2xl font-bold text-foreground mb-2">
+              <h1 className="font-display text-2xl font-extrabold text-foreground mb-2 tracking-tight">
                 Iniciar Sessão
               </h1>
               <p className="text-muted-foreground text-sm">
@@ -109,18 +115,18 @@ const Login = () => {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-foreground text-sm font-medium">
+                <Label htmlFor="email" className="text-foreground text-sm font-semibold">
                   Email
                 </Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-base">📧</span>
                   <Input
                     id="email"
                     type="email"
                     placeholder="seu@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 h-12 bg-secondary border-border text-foreground placeholder:text-muted-foreground focus:border-primary rounded-xl"
+                    className="pl-11 h-13 bg-white/50 border-white/30 text-foreground placeholder:text-muted-foreground focus:border-primary rounded-xl backdrop-blur-sm"
                     required
                     disabled={loading}
                   />
@@ -128,18 +134,18 @@ const Login = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-foreground text-sm font-medium">
+                <Label htmlFor="password" className="text-foreground text-sm font-semibold">
                   Senha
                 </Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-base">🔑</span>
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
                     placeholder="Sua senha"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-10 h-12 bg-secondary border-border text-foreground placeholder:text-muted-foreground focus:border-primary rounded-xl"
+                    className="pl-11 pr-10 h-13 bg-white/50 border-white/30 text-foreground placeholder:text-muted-foreground focus:border-primary rounded-xl backdrop-blur-sm"
                     required
                     disabled={loading}
                   />
@@ -157,18 +163,18 @@ const Login = () => {
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">
                   <input 
                     type="checkbox" 
-                    className="rounded border-border bg-secondary w-4 h-4 text-primary focus:ring-primary" 
+                    className="rounded border-border bg-white/50 w-4 h-4 text-primary focus:ring-primary" 
                   />
                   Lembrar-me
                 </label>
-                <Link to="/recuperar-senha" className="text-sm text-primary hover:underline font-medium">
+                <Link to="/recuperar-senha" className="text-sm text-primary hover:underline font-semibold">
                   Esqueceu?
                 </Link>
               </div>
 
               <Button 
                 type="submit" 
-                className="w-full h-12 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl transition-all shadow-lg shadow-primary/30" 
+                className="w-full h-13 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl transition-all shadow-xl shadow-primary/25 hover:shadow-2xl hover:shadow-primary/30 hover:-translate-y-0.5" 
                 disabled={loading}
               >
                 {loading ? (
@@ -185,14 +191,13 @@ const Login = () => {
             <div className="mt-6 text-center">
               <p className="text-muted-foreground text-sm">
                 Não tem conta?{" "}
-                <Link to="/registro" className="text-primary hover:underline font-semibold">
+                <Link to="/registro" className="text-primary hover:underline font-bold">
                   Criar conta
                 </Link>
               </p>
             </div>
           </div>
 
-          {/* Country notice */}
           <div className="mt-6 text-center">
             <p className="text-[11px] text-muted-foreground">
               Disponível apenas para Angola e Moçambique
