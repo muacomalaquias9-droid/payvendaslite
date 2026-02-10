@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, User, LogIn, ShoppingCart } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import payvendasLogo from "@/assets/payvendas-logo.png";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -18,15 +18,13 @@ export const Header = () => {
   const { user, profile, signOut, loading } = useAuth();
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-b border-border/50 shadow-sm">
+    <header className="fixed top-0 left-0 right-0 z-50 liquid-glass border-b-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.3)' }}>
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
             <img src={payvendasLogo} alt="PayVendas" className="h-10" />
           </Link>
 
-          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => {
               const isActive = location.pathname === link.href;
@@ -34,10 +32,10 @@ export const Header = () => {
                 <Link
                   key={link.href}
                   to={link.href}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
                     isActive
-                      ? "bg-primary text-white"
-                      : "text-foreground/70 hover:text-foreground hover:bg-secondary"
+                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                      : "text-foreground/70 hover:text-foreground hover:bg-white/40"
                   }`}
                 >
                   {link.label}
@@ -46,25 +44,23 @@ export const Header = () => {
             })}
           </nav>
 
-          {/* Auth Buttons */}
           <div className="hidden md:flex items-center gap-3">
             {loading ? (
-              <div className="w-20 h-8 bg-secondary rounded animate-pulse" />
+              <div className="w-20 h-8 bg-secondary rounded-xl animate-pulse" />
             ) : user ? (
               <div className="flex items-center gap-3">
                 <Link to="/trading">
                   <Button 
                     size="sm"
-                    className="bg-secondary text-foreground hover:bg-muted border border-border"
+                    className="liquid-glass text-foreground hover:bg-white/50 rounded-xl font-semibold border-0"
                   >
-                    <User size={16} className="mr-2" />
-                    {profile?.full_name?.split(' ')[0] || 'Conta'}
+                    👤 {profile?.full_name?.split(' ')[0] || 'Conta'}
                   </Button>
                 </Link>
                 <Button 
                   size="sm"
                   variant="ghost" 
-                  className="text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground rounded-xl"
                   onClick={() => signOut()}
                 >
                   Sair
@@ -76,16 +72,15 @@ export const Header = () => {
                   <Button 
                     size="sm"
                     variant="ghost" 
-                    className="text-foreground/70 hover:text-foreground"
+                    className="text-foreground/70 hover:text-foreground rounded-xl font-semibold"
                   >
-                    <LogIn size={16} className="mr-2" />
                     Entrar
                   </Button>
                 </Link>
                 <Link to="/registro">
                   <Button 
                     size="sm"
-                    className="bg-primary hover:bg-primary/90 text-white shadow-md"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 rounded-xl font-bold"
                   >
                     Criar Conta
                   </Button>
@@ -94,24 +89,22 @@ export const Header = () => {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden p-2 rounded-lg bg-secondary text-foreground"
+            className="md:hidden p-2 rounded-xl liquid-glass text-foreground"
           >
             {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Menu */}
       <AnimatePresence>
         {isMenuOpen && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden bg-white border-t border-border"
+            className="md:hidden liquid-glass border-t border-white/20"
           >
             <nav className="container mx-auto px-4 py-4 flex flex-col gap-2">
               {navLinks.map((link) => {
@@ -121,30 +114,27 @@ export const Header = () => {
                     key={link.href}
                     to={link.href}
                     onClick={() => setIsMenuOpen(false)}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all ${
+                    className={`px-4 py-3 rounded-xl font-semibold transition-all ${
                       isActive
-                        ? "bg-primary text-white"
-                        : "text-foreground/70 hover:bg-secondary"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-foreground/70 hover:bg-white/30"
                     }`}
                   >
                     {link.label}
                   </Link>
                 );
               })}
-              <div className="flex gap-2 mt-4 pt-4 border-t border-border">
+              <div className="flex gap-2 mt-4 pt-4 border-t border-border/30">
                 {user ? (
                   <>
                     <Link to="/trading" className="flex-1" onClick={() => setIsMenuOpen(false)}>
-                      <Button className="w-full bg-secondary text-foreground hover:bg-muted">
+                      <Button className="w-full liquid-glass text-foreground hover:bg-white/40 border-0 rounded-xl">
                         Dashboard
                       </Button>
                     </Link>
                     <Button 
-                      className="flex-1 bg-transparent border border-border text-foreground"
-                      onClick={() => {
-                        signOut();
-                        setIsMenuOpen(false);
-                      }}
+                      className="flex-1 bg-transparent border border-border/30 text-foreground rounded-xl"
+                      onClick={() => { signOut(); setIsMenuOpen(false); }}
                     >
                       Sair
                     </Button>
@@ -152,12 +142,12 @@ export const Header = () => {
                 ) : (
                   <>
                     <Link to="/login" className="flex-1" onClick={() => setIsMenuOpen(false)}>
-                      <Button className="w-full bg-secondary text-foreground hover:bg-muted">
+                      <Button className="w-full liquid-glass text-foreground hover:bg-white/40 border-0 rounded-xl">
                         Entrar
                       </Button>
                     </Link>
                     <Link to="/registro" className="flex-1" onClick={() => setIsMenuOpen(false)}>
-                      <Button className="w-full bg-primary hover:bg-primary/90 text-white">
+                      <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-bold">
                         Registar
                       </Button>
                     </Link>
