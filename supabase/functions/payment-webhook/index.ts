@@ -208,15 +208,7 @@ app.post("/initiate", async (c) => {
       return c.json({ error: "Profile not found" }, { status: 404, headers: corsHeaders });
     }
 
-    // Check KYC status
-    if (profile.kyc_status !== "approved") {
-      return c.json({ error: "KYC não aprovado. Complete a verificação primeiro." }, { status: 400, headers: corsHeaders });
-    }
-
-    // Check wallet activation
-    if (!profile.wallet_activated) {
-      return c.json({ error: "Carteira não ativada. Ative primeiro pagando 100 AOA." }, { status: 400, headers: corsHeaders });
-    }
+    // KYC and wallet checks removed - wallet is always active for all users
 
     // Validate withdrawal
     if (type === "withdrawal") {
@@ -251,8 +243,13 @@ app.post("/initiate", async (c) => {
     }
 
     // Validate deposit minimum
-    if (type === "deposit" && amount < 100) {
-      return c.json({ error: "Valor mínimo de depósito: 100 AOA" }, { status: 400, headers: corsHeaders });
+    if (type === "deposit" && amount < 12) {
+      return c.json({ error: "Valor mínimo de depósito: 12 AOA" }, { status: 400, headers: corsHeaders });
+    }
+
+    // Validate deposit maximum
+    if (type === "deposit" && amount > 1000000) {
+      return c.json({ error: "Valor máximo de depósito: 1.000.000 AOA" }, { status: 400, headers: corsHeaders });
     }
 
     // Create transaction record first
