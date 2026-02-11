@@ -56,10 +56,10 @@ const tradingDurations = [
   { label: "5m", seconds: 300, multiplier: 1.82, payout: 182 },
 ];
 
-const MIN_INVEST = 50;
-const MAX_INVEST = 5000000;
+const MIN_INVEST = 12;
+const MAX_INVEST = 1000000;
 const ADMIN_COMMISSION = 0.15;
-const ADMIN_USER_ID = 'f928c5cb-2be8-4c49-b1d6-b9f61c2f08fb';
+const ADMIN_EMAILS = ['isaacmuaco582@gmail.com', 'derivaldokiala@gmail.com'];
 
 export const ProfessionalTradingChart = ({ 
   isDemoMode = false, 
@@ -324,17 +324,27 @@ export const ProfessionalTradingChart = ({
         }
 
         if (!isWin && commission > 0) {
-          const { data: adminProfile } = await supabase
-            .from('profiles')
-            .select('balance')
-            .eq('user_id', ADMIN_USER_ID)
-            .single();
+          // Find admin by email and credit commission
+          const { data: adminUsers } = await supabase
+            .from('user_roles')
+            .select('user_id')
+            .eq('role', 'admin')
+            .limit(1);
 
-          if (adminProfile) {
-            await supabase
+          if (adminUsers && adminUsers.length > 0) {
+            const adminUserId = adminUsers[0].user_id;
+            const { data: adminProfile } = await supabase
               .from('profiles')
-              .update({ balance: (adminProfile.balance || 0) + commission })
-              .eq('user_id', ADMIN_USER_ID);
+              .select('balance')
+              .eq('user_id', adminUserId)
+              .single();
+
+            if (adminProfile) {
+              await supabase
+                .from('profiles')
+                .update({ balance: (adminProfile.balance || 0) + commission })
+                .eq('user_id', adminUserId);
+            }
           }
         }
 

@@ -138,8 +138,13 @@ const Wallet = () => {
     if (!user || !profile) return;
     
     const depositAmount = parseFloat(amount);
-    if (isNaN(depositAmount) || depositAmount < 100) {
-      toast.error("Valor mínimo de depósito: 100 AOA");
+    if (isNaN(depositAmount) || depositAmount < 12) {
+      toast.error("Valor mínimo de depósito: 12 AOA");
+      return;
+    }
+
+    if (depositAmount > 1000000) {
+      toast.error("Valor máximo de depósito: 1.000.000 AOA");
       return;
     }
 
