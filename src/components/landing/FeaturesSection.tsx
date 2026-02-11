@@ -1,33 +1,34 @@
 import { motion } from "framer-motion";
+import { BookOpen, ShoppingBag, Wallet, Users, Shield, Gift } from "lucide-react";
 
 const features = [
   {
-    emoji: "📚",
+    icon: BookOpen,
     title: "Venda PDFs",
     description: "Publique seus e-books e conteúdos digitais. Receba 85% do valor de cada venda.",
   },
   {
-    emoji: "🛍️",
+    icon: ShoppingBag,
     title: "Marketplace",
     description: "Aceda a uma loja de conteúdos educativos de alta qualidade criados pela comunidade.",
   },
   {
-    emoji: "💳",
+    icon: Wallet,
     title: "Carteira Digital",
     description: "Receba pagamentos e faça saques via Multicaixa Express e PayPay África.",
   },
   {
-    emoji: "👥",
+    icon: Users,
     title: "Comunidade",
     description: "Conecte-se com outros criadores e traders. Partilhe conhecimento e resultados.",
   },
   {
-    emoji: "🔐",
+    icon: Shield,
     title: "Segurança",
     description: "Verificação KYC obrigatória para garantir transações seguras na plataforma.",
   },
   {
-    emoji: "🎁",
+    icon: Gift,
     title: "Programa de Afiliados",
     description: "Ganhe 5% de comissão sobre os lucros de trading dos usuários que você indicar.",
   },
@@ -57,25 +58,30 @@ export const FeaturesSection = () => {
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {features.map((feature, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: index * 0.08 }}
-              whileHover={{ y: -6, transition: { duration: 0.3 } }}
-              className="liquid-glass rounded-3xl p-7 cursor-default group"
-            >
-              <div className="text-4xl mb-5">{feature.emoji}</div>
-              <h3 className="font-display text-xl font-bold text-foreground mb-3 group-hover:text-primary transition-colors">
-                {feature.title}
-              </h3>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                {feature.description}
-              </p>
-            </motion.div>
-          ))}
+          {features.map((feature, index) => {
+            const Icon = feature.icon;
+            return (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.08 }}
+                whileHover={{ y: -6, transition: { duration: 0.3 } }}
+                className="liquid-glass rounded-3xl p-7 cursor-default group"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-5 group-hover:bg-primary/20 transition-colors">
+                  <Icon className="text-primary" size={26} />
+                </div>
+                <h3 className="font-display text-xl font-bold text-foreground mb-3 group-hover:text-primary transition-colors">
+                  {feature.title}
+                </h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  {feature.description}
+                </p>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     </section>

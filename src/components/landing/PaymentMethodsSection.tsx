@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { Lock, ShieldCheck } from "lucide-react";
 import paypayLogo from "@/assets/paypay-logo.webp";
 import multicaixaLogo from "@/assets/multicaixa-logo.webp";
 import pliqpagLogo from "@/assets/pliqpag-logo.png";
@@ -76,11 +77,11 @@ export const PaymentMethodsSection = () => {
           className="flex items-center justify-center gap-8 mt-14"
         >
           <div className="flex items-center gap-2 text-muted-foreground">
-            <span className="text-lg">🔒</span>
+            <Lock size={16} className="text-primary" />
             <span className="text-sm font-semibold">Pagamentos 100% Seguros</span>
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
-            <span className="text-lg">✅</span>
+            <ShieldCheck size={16} className="text-primary" />
             <span className="text-sm font-semibold">Verificação KYC</span>
           </div>
         </motion.div>

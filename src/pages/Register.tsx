@@ -12,8 +12,8 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 const ALLOWED_COUNTRIES = [
-  { code: "+244", name: "Angola", flag: "🇦🇴" },
-  { code: "+258", name: "Moçambique", flag: "🇲🇿" },
+  { code: "+244", name: "Angola", flag: "AO" },
+  { code: "+258", name: "Moçambique", flag: "MZ" },
 ];
 
 const Register = () => {

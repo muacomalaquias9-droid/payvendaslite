@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu, X, User } from "lucide-react";
 import payvendasLogo from "@/assets/payvendas-logo.png";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -54,7 +54,8 @@ export const Header = () => {
                     size="sm"
                     className="liquid-glass text-foreground hover:bg-white/50 rounded-xl font-semibold border-0"
                   >
-                    👤 {profile?.full_name?.split(' ')[0] || 'Conta'}
+                    <User size={16} className="mr-1.5" />
+                    {profile?.full_name?.split(' ')[0] || 'Conta'}
                   </Button>
                 </Link>
                 <Button 

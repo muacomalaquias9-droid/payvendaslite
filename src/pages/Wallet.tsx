@@ -324,8 +324,8 @@ const Wallet = () => {
   };
 
   const balance = profile?.balance || 0;
-  const isWalletActive = profile?.wallet_activated;
-  const canActivate = profile?.kyc_status === 'approved' && !isWalletActive;
+  const isWalletActive = true; // Wallet is always active for all users
+  const canActivate = false;
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -482,8 +482,8 @@ const Wallet = () => {
               </div>
             </motion.div>
 
-            {/* Activation Card */}
-            {!isWalletActive && (
+            {/* Activation Card - Hidden since wallet is always active */}
+            {false && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}

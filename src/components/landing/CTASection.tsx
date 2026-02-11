@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Gift, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
@@ -31,7 +31,7 @@ export const CTASection = () => {
           className="text-center max-w-3xl mx-auto"
         >
           <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full liquid-glass-dark text-white/90 text-sm font-semibold mb-10">
-            <span className="text-lg">🎁</span>
+            <Gift size={16} className="text-primary" />
             <span>Bônus de 500 AOA ao criar conta</span>
           </div>
 
@@ -50,7 +50,7 @@ export const CTASection = () => {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/registro">
               <Button className="bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-10 py-7 w-full sm:w-auto rounded-2xl font-bold shadow-2xl shadow-primary/30 hover:-translate-y-0.5 transition-all">
-                <span className="mr-2 text-xl">✨</span>
+                <Sparkles className="mr-2" size={20} />
                 Criar Conta Grátis
                 <ArrowRight className="ml-2" size={20} />
               </Button>
