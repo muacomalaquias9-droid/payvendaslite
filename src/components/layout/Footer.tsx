@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { AlertTriangle, Lock, ShieldCheck } from "lucide-react";
 import payvendasLogo from "@/assets/payvendas-logo.png";
 
 export const Footer = () => {
@@ -8,7 +9,7 @@ export const Footer = () => {
       <div className="bg-destructive/5 border-b border-destructive/10 py-4">
         <div className="container mx-auto px-4">
           <div className="flex items-start gap-3 text-sm">
-            <span className="text-lg shrink-0 mt-0.5">⚠️</span>
+            <AlertTriangle size={18} className="text-destructive shrink-0 mt-0.5" />
             <p className="text-muted-foreground">
               <span className="text-destructive font-bold">Aviso de Risco:</span>{" "}
               O mercado financeiro envolve riscos significativos. A PayVendas não garante lucros. 
@@ -87,11 +88,11 @@ export const Footer = () => {
           </p>
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
-              <span>🔒</span>
+              <Lock size={14} className="text-primary" />
               <span>Seguro</span>
             </div>
             <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
-              <span>✅</span>
+              <ShieldCheck size={14} className="text-primary" />
               <span>KYC Obrigatório</span>
             </div>
           </div>
