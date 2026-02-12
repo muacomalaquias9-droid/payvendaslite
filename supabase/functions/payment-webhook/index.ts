@@ -14,7 +14,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // PlinqPay API configuration
 const PLINQPAY_API_URL = "https://api.plinqpay.com/v1/transaction";
-const PLINQPAY_API_KEY = Deno.env.get("PLIQPAG_API_KEY")!;
+const PLINQPAY_API_KEY = Deno.env.get("sk_U0dR0gO/7OIloX3jG8aNadRMFw88Ob26acETmc0zpoPmmNvvfJuwqlVJr/hup7Ku")!;
 const ENTITY_CODE = "01055";
 
 const getCallbackUrl = () => {
