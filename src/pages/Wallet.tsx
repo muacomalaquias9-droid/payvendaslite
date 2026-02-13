@@ -40,7 +40,6 @@ interface Transaction {
 }
 
 const PAYMENT_METHODS = [
-  { id: 'pliqpag', name: 'PliqPag (Referência)', icon: pliqpagLogo, color: 'bg-emerald-500/20' },
   { id: 'multicaixa', name: 'Multicaixa Express', icon: multicaixaLogo, color: 'bg-orange-500/20' },
   { id: 'paypay', name: 'PayPay África', icon: paypayLogo, color: 'bg-cyan-500/20' },
 ];
@@ -58,6 +57,10 @@ const Wallet = () => {
   // Deposit/Withdraw modals
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showPaymentInfo, setShowPaymentInfo] = useState(false);
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentEntity, setPaymentEntity] = useState("01055");
+  const [paymentAmount, setPaymentAmount] = useState(0);
   const [selectedMethod, setSelectedMethod] = useState(PAYMENT_METHODS[0]);
   const [amount, setAmount] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -178,24 +181,12 @@ const Wallet = () => {
         throw new Error(result.error || 'Erro ao processar depósito');
       }
 
-      toast.success(
-        <div className="space-y-2">
-          <p className="font-semibold">Depósito solicitado!</p>
-          <p className="text-xs whitespace-pre-line">{result.instructions}</p>
-          {result.reference && (
-            <p className="text-xs text-primary font-mono">Referência: {result.reference}</p>
-          )}
-        </div>,
-        { duration: 15000 }
-      );
-
-      if (result.payment_url) {
-        setTimeout(() => {
-          window.open(result.payment_url, '_blank');
-        }, 1500);
-      }
-
+      // Show payment reference info
+      setPaymentReference(result.reference || result.plinqpay_id || '');
+      setPaymentEntity(result.entity || '01055');
+      setPaymentAmount(depositAmount);
       setShowDepositModal(false);
+      setShowPaymentInfo(true);
       setAmount("");
       setPhoneNumber("");
       fetchTransactions();
@@ -267,17 +258,10 @@ const Wallet = () => {
       toast.success(
         <div className="space-y-2">
           <p className="font-semibold">Levantamento solicitado!</p>
-          <p className="text-xs whitespace-pre-line">{result.instructions}</p>
-          <p className="text-xs text-primary">Referência: {result.reference}</p>
+          <p className="text-xs">Seu saque de {withdrawAmount.toLocaleString('pt-AO')} AOA será processado pelo administrador e cairá na sua conta {selectedMethod.name}.</p>
         </div>,
         { duration: 10000 }
       );
-
-      if (result.deep_link) {
-        setTimeout(() => {
-          window.location.href = result.deep_link;
-        }, 1500);
-      }
 
       setShowWithdrawModal(false);
       setAmount("");
@@ -644,7 +628,7 @@ const Wallet = () => {
                     type="number"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    placeholder="Mínimo: 100 AOA"
+                    placeholder="Mínimo: 12 AOA"
                     className="bg-secondary border-border text-foreground"
                   />
                 </div>
@@ -757,6 +741,76 @@ const Wallet = () => {
                   {processing ? 'Processando...' : 'Confirmar Levantamento'}
                 </Button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Payment Reference Info Modal */}
+      <AnimatePresence>
+        {showPaymentInfo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowPaymentInfo(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white border border-border rounded-2xl w-full max-w-sm p-6 shadow-xl text-center"
+            >
+              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="text-primary" size={28} />
+              </div>
+              
+              <h3 className="font-bold text-lg text-foreground mb-2">Referência de Pagamento</h3>
+              <p className="text-sm text-muted-foreground mb-5">
+                Pague via Multicaixa Express ou PayPay África com os dados abaixo:
+              </p>
+
+              <div className="space-y-3 bg-secondary rounded-xl p-4 text-left mb-5">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Entidade</span>
+                  <span className="font-bold text-foreground font-mono">{paymentEntity}</span>
+                </div>
+                <div className="border-t border-border" />
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Referência</span>
+                  <span className="font-bold text-foreground font-mono text-sm">{paymentReference}</span>
+                </div>
+                <div className="border-t border-border" />
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Valor</span>
+                  <span className="font-bold text-foreground">{paymentAmount.toLocaleString('pt-AO')} AOA</span>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground mb-4">
+                Após o pagamento, o saldo será creditado automaticamente na sua conta.
+              </p>
+
+              <Button
+                onClick={() => {
+                  navigator.clipboard.writeText(`Entidade: ${paymentEntity}\nReferência: ${paymentReference}\nValor: ${paymentAmount} AOA`);
+                  toast.success("Dados copiados!");
+                }}
+                variant="outline"
+                className="w-full h-11 mb-2 border-border"
+              >
+                <Copy size={16} className="mr-2" />
+                Copiar Dados
+              </Button>
+              
+              <Button
+                onClick={() => setShowPaymentInfo(false)}
+                className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+              >
+                Fechar
+              </Button>
             </motion.div>
           </motion.div>
         )}
