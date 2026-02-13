@@ -8,13 +8,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const supabaseUrl = Deno.env.get("https://owtcqvefxjncwunhkxdc.supabase.co")!;
-const supabaseServiceKey = Deno.env.get("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93dGNxdmVmeGpuY3d1bmhreGRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4NzU3MjMsImV4cCI6MjA4NTQ1MTcyM30.EoFxpzS5Phv0tE98kXjGy3FUXEwlXTqsaq-QxzCWjF0")!;
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // PlinqPay API configuration
 const PLINQPAY_API_URL = "https://api.plinqpay.com/v1/transaction";
-const PLINQPAY_API_KEY = Deno.env.get("sk_U0dR0gO/7OIloX3jG8aNadRMFw88Ob26acETmc0zpoPmmNvvfJuwqlVJr/hup7Ku")!;
+const PLINQPAY_API_KEY = Deno.env.get("PLINQPAY_API_KEY")!;
 const ENTITY_CODE = "01055";
 
 const getCallbackUrl = () => {
