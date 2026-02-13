@@ -81,7 +81,7 @@ interface Trade {
 }
 
 // Admin email
-const ADMIN_EMAIL = 'isaacmuaco582@gmail.com';
+const ADMIN_EMAIL = 'isaacmilagre9@gmail.com';
 
 const Admin = () => {
   const { user, isAdmin, loading, signOut } = useAuth();
