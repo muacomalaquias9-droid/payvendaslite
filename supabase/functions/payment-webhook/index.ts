@@ -12,7 +12,6 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// PlinqPay API configuration
 const PLINQPAY_API_URL = "https://api.plinqpay.com/v1/transaction";
 const PLINQPAY_API_KEY = Deno.env.get("PLINQPAY_API_KEY")!;
 const ENTITY_CODE = "01055";
@@ -109,14 +108,12 @@ app.post("/plinqpay-callback", async (c) => {
       if (transaction.type === "pdf_purchase") {
         const productId = transaction.description?.match(/product:(\S+)/)?.[1];
         if (productId) {
-          // Record purchase
           await supabase.from("pdf_purchases").insert({
             user_id: transaction.user_id,
             product_id: productId,
             amount: transaction.amount
           });
 
-          // Update downloads count
           const { data: product } = await supabase
             .from("pdf_products")
             .select("*")
@@ -181,7 +178,7 @@ app.post("/plinqpay-callback", async (c) => {
   }
 });
 
-// Initiate payment via PlinqPay
+// Initiate payment via PlinqPay - deposits generate reference, withdrawals are manual
 app.post("/initiate", async (c) => {
   try {
     const authHeader = c.req.header("Authorization");
@@ -191,7 +188,7 @@ app.post("/initiate", async (c) => {
 
     const { type, amount, method, phone } = await c.req.json();
 
-    if (!type || !amount || !phone) {
+    if (!type || !amount) {
       return c.json({ error: "Missing required fields" }, { status: 400, headers: corsHeaders });
     }
 
@@ -214,6 +211,9 @@ app.post("/initiate", async (c) => {
 
     // Validate withdrawal
     if (type === "withdrawal") {
+      if (!phone || phone.length < 9) {
+        return c.json({ error: "Número de telefone obrigatório para levantamento" }, { status: 400, headers: corsHeaders });
+      }
       if (amount < 200) {
         return c.json({ error: "Valor mínimo de levantamento: 200 AOA" }, { status: 400, headers: corsHeaders });
       }
@@ -249,8 +249,10 @@ app.post("/initiate", async (c) => {
         type,
         amount,
         status: "pending",
-        method: "PlinqPay",
-        description: `${type === "deposit" ? "Depósito" : "Levantamento"} via PlinqPay - ${phone}`
+        method: method || "PlinqPay",
+        description: type === "withdrawal" 
+          ? `Levantamento via ${method || 'PlinqPay'} - ${phone}`
+          : `Depósito via PlinqPay`
       })
       .select()
       .single();
@@ -258,6 +260,9 @@ app.post("/initiate", async (c) => {
     if (txError) throw txError;
 
     if (type === "deposit") {
+      // Generate reference via PlinqPay API - no phone needed
+      const clientPhone = phone || profile.phone || "+244900000000";
+      
       const plinqpayPayload: PlinqPayTransaction = {
         externalId: transaction.id,
         callbackUrl: getCallbackUrl(),
@@ -265,7 +270,7 @@ app.post("/initiate", async (c) => {
         client: {
           name: profile.full_name || "Cliente PayVendas",
           email: user.email || "cliente@payvendas.app",
-          phone: phone.startsWith("+244") ? phone : `+244${phone}`
+          phone: clientPhone.startsWith("+244") ? clientPhone : `+244${clientPhone}`
         },
         items: [
           {
@@ -305,7 +310,7 @@ app.post("/initiate", async (c) => {
       await supabase
         .from("transactions")
         .update({ 
-          description: `${transaction.description} - Ref: ${plinqpayResult.reference || plinqpayResult.id}`
+          description: `Depósito via PlinqPay - Ref: ${plinqpayResult.reference || plinqpayResult.id}`
         })
         .eq("id", transaction.id);
 
@@ -337,7 +342,7 @@ app.post("/initiate", async (c) => {
   }
 });
 
-// PDF Purchase via PlinqPay
+// PDF Purchase via PlinqPay - no phone needed
 app.post("/purchase-pdf", async (c) => {
   try {
     const authHeader = c.req.header("Authorization");
@@ -345,9 +350,9 @@ app.post("/purchase-pdf", async (c) => {
       return c.json({ error: "Unauthorized" }, { status: 401, headers: corsHeaders });
     }
 
-    const { product_id, phone } = await c.req.json();
+    const { product_id } = await c.req.json();
 
-    if (!product_id || !phone) {
+    if (!product_id) {
       return c.json({ error: "Missing required fields" }, { status: 400, headers: corsHeaders });
     }
 
@@ -380,6 +385,11 @@ app.post("/purchase-pdf", async (c) => {
       return c.json({ error: "Produto não encontrado" }, { status: 404, headers: corsHeaders });
     }
 
+    // Block self-purchase
+    if (product.user_id === user.id) {
+      return c.json({ error: "Você não pode comprar seu próprio produto" }, { status: 400, headers: corsHeaders });
+    }
+
     // Check if already purchased
     const { data: existingPurchase } = await supabase
       .from("pdf_purchases")
@@ -408,7 +418,9 @@ app.post("/purchase-pdf", async (c) => {
 
     if (txError) throw txError;
 
-    // Create PlinqPay transaction
+    const clientPhone = profile.phone || "+244900000000";
+
+    // Create PlinqPay transaction - no phone input needed
     const plinqpayPayload: PlinqPayTransaction = {
       externalId: transaction.id,
       callbackUrl: getCallbackUrl(),
@@ -416,7 +428,7 @@ app.post("/purchase-pdf", async (c) => {
       client: {
         name: profile.full_name || "Cliente PayVendas",
         email: user.email || "cliente@payvendas.app",
-        phone: phone.startsWith("+244") ? phone : `+244${phone}`
+        phone: clientPhone.startsWith("+244") ? clientPhone : `+244${clientPhone}`
       },
       items: [
         {
@@ -529,7 +541,7 @@ app.get("/purchase-status/:transactionId", async (c) => {
   }
 });
 
-// Admin endpoint to process transactions (approve/reject withdrawals)
+// Admin endpoint to process transactions
 app.post("/admin/process", async (c) => {
   try {
     const authHeader = c.req.header("Authorization");
