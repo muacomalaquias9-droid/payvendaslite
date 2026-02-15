@@ -53,15 +53,13 @@ const PDFStore = () => {
   const [products, setProducts] = useState<PDFProduct[]>([]);
   const [myProducts, setMyProducts] = useState<PDFProduct[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'loja' | 'meus' | 'compras'>('loja');
+  const [activeTab, setActiveTab] = useState<'loja' | 'meus'>('loja');
   const [loading, setLoading] = useState(true);
   const [purchasedIds, setPurchasedIds] = useState<string[]>([]);
   
-  // Purchase modal
-  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<PDFProduct | null>(null);
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [processing, setProcessing] = useState(false);
+  // Purchase state
+  const [showLoadingSplash, setShowLoadingSplash] = useState(false);
+  const [showPurchaseInfo, setShowPurchaseInfo] = useState(false);
   const [pendingPurchase, setPendingPurchase] = useState<PendingPurchase | null>(null);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
@@ -105,7 +103,6 @@ const PDFStore = () => {
         setMyProducts(userProducts);
       }
 
-      // Fetch purchased product IDs
       const { data: purchases } = await supabase
         .from('pdf_purchases')
         .select('product_id')
@@ -130,7 +127,6 @@ const PDFStore = () => {
     setUploading(true);
 
     try {
-      // Upload PDF file
       const fileExt = pdfFile.name.split('.').pop();
       const filePath = `${user.id}/${Date.now()}.${fileExt}`;
       
@@ -144,7 +140,6 @@ const PDFStore = () => {
         .from('pdf-products')
         .getPublicUrl(filePath);
 
-      // Upload cover image if provided
       let coverUrl = null;
       if (coverImage) {
         const imgExt = coverImage.name.split('.').pop();
@@ -189,22 +184,76 @@ const PDFStore = () => {
     }
   };
 
-  const handlePurchase = (product: PDFProduct) => {
+  const handlePurchase = async (product: PDFProduct) => {
     if (!user) {
       toast.error("Faça login para comprar");
       return;
     }
 
+    // Block self-purchase
+    if (product.user_id === user.id) {
+      toast.error("Você não pode comprar seu próprio produto");
+      return;
+    }
+
+    // Already purchased, download directly
     if (purchasedIds.includes(product.id)) {
-      // Already purchased, download directly
       if (product.file_url) {
         downloadPDF(product.file_url, product.title);
       }
       return;
     }
 
-    setSelectedProduct(product);
-    setShowPurchaseModal(true);
+    // Show loading splash immediately, generate reference
+    setShowLoadingSplash(true);
+
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/payment-webhook/purchase-pdf`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.session?.access_token}`
+        },
+        body: JSON.stringify({
+          product_id: product.id
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        if (result.already_purchased) {
+          if (product.file_url) {
+            downloadPDF(product.file_url, product.title);
+          }
+          setShowLoadingSplash(false);
+          return;
+        }
+        throw new Error(result.error || "Erro ao processar compra");
+      }
+
+      setShowLoadingSplash(false);
+
+      setPendingPurchase({
+        transactionId: result.transaction_id,
+        productId: product.id,
+        productTitle: product.title,
+        reference: result.reference,
+        entity: result.entity || ENTITY_CODE,
+        amount: product.price,
+        status: "pending"
+      });
+      setShowPurchaseInfo(true);
+
+      // Start polling for payment status
+      startPaymentPolling(result.transaction_id, product);
+
+    } catch (error: any) {
+      setShowLoadingSplash(false);
+      toast.error(error.message || "Erro ao processar compra");
+    }
   };
 
   const downloadPDF = (url: string, title: string) => {
@@ -218,64 +267,7 @@ const PDFStore = () => {
     toast.success("Download iniciado!");
   };
 
-  const initiatePurchase = async () => {
-    if (!selectedProduct || !phoneNumber || phoneNumber.length < 9) {
-      toast.error("Insira um número de telefone válido");
-      return;
-    }
-
-    setProcessing(true);
-
-    try {
-      const { data: session } = await supabase.auth.getSession();
-      
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/payment-webhook/purchase-pdf`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.session?.access_token}`
-        },
-        body: JSON.stringify({
-          product_id: selectedProduct.id,
-          phone: phoneNumber
-        })
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        if (result.already_purchased) {
-          // Already purchased, just download
-          if (selectedProduct.file_url) {
-            downloadPDF(selectedProduct.file_url, selectedProduct.title);
-          }
-          setShowPurchaseModal(false);
-          return;
-        }
-        throw new Error(result.error || "Erro ao processar compra");
-      }
-
-      setPendingPurchase({
-        transactionId: result.transaction_id,
-        productId: selectedProduct.id,
-        productTitle: selectedProduct.title,
-        reference: result.reference,
-        entity: result.entity || ENTITY_CODE,
-        amount: selectedProduct.price,
-        status: "pending"
-      });
-
-      // Start polling for payment status
-      startPaymentPolling(result.transaction_id);
-
-    } catch (error: any) {
-      toast.error(error.message || "Erro ao processar compra");
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const startPaymentPolling = (transactionId: string) => {
+  const startPaymentPolling = (transactionId: string, product: PDFProduct) => {
     if (pollRef.current) clearInterval(pollRef.current);
 
     pollRef.current = setInterval(async () => {
@@ -297,7 +289,7 @@ const PDFStore = () => {
           
           if (result.file_url) {
             setTimeout(() => {
-              downloadPDF(result.file_url, pendingPurchase?.productTitle || "documento");
+              downloadPDF(result.file_url, product.title);
             }, 1000);
           }
           
@@ -391,59 +383,66 @@ const PDFStore = () => {
                 <p className="font-medium">Nenhum produto disponível</p>
               </div>
             ) : (
-              products.map((product, index) => (
-                <motion.div
-                  key={product.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="bg-white border border-border rounded-xl p-4 shadow-sm"
-                >
-                  <div className="flex gap-4">
-                    <div className="w-16 h-20 rounded-lg flex-shrink-0 overflow-hidden bg-primary/10">
-                      {product.cover_image_url ? (
-                        <img src={product.cover_image_url} alt={product.title} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <FileText className="text-primary" size={24} />
+              products.map((product, index) => {
+                const isOwner = user && product.user_id === user.id;
+                return (
+                  <motion.div
+                    key={product.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="bg-white border border-border rounded-xl p-4 shadow-sm"
+                  >
+                    <div className="flex gap-4">
+                      <div className="w-16 h-20 rounded-lg flex-shrink-0 overflow-hidden bg-primary/10">
+                        {product.cover_image_url ? (
+                          <img src={product.cover_image_url} alt={product.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <FileText className="text-primary" size={24} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-foreground text-sm truncate">{product.title}</h3>
+                        {product.description && (
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{product.description}</p>
+                        )}
+                        <div className="flex items-center gap-2 mt-2">
+                          <Download size={12} className="text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">{product.downloads_count || 0} downloads</span>
                         </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground text-sm truncate">{product.title}</h3>
-                      {product.description && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{product.description}</p>
-                      )}
-                      <div className="flex items-center gap-2 mt-2">
-                        <Download size={12} className="text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground">{product.downloads_count || 0} downloads</span>
+                      </div>
+                      <div className="text-right flex flex-col items-end justify-between">
+                        <span className="font-bold text-primary">
+                          {product.price.toLocaleString('pt-AO')} AOA
+                        </span>
+                        {isOwner ? (
+                          <span className="text-xs text-muted-foreground bg-secondary px-2 py-1 rounded">Seu produto</span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() => handlePurchase(product)}
+                            className="bg-primary hover:bg-primary/90 text-white text-xs h-8 shadow-md"
+                          >
+                            {purchasedIds.includes(product.id) ? (
+                              <>
+                                <Download size={14} className="mr-1" />
+                                Baixar
+                              </>
+                            ) : (
+                              <>
+                                <ShoppingCart size={14} className="mr-1" />
+                                Comprar
+                              </>
+                            )}
+                          </Button>
+                        )}
                       </div>
                     </div>
-                    <div className="text-right flex flex-col items-end justify-between">
-                      <span className="font-bold text-primary">
-                        {product.price.toLocaleString('pt-AO')} AOA
-                      </span>
-                      <Button
-                        size="sm"
-                        onClick={() => handlePurchase(product)}
-                        className="bg-primary hover:bg-primary/90 text-white text-xs h-8 shadow-md"
-                      >
-                        {purchasedIds.includes(product.id) ? (
-                          <>
-                            <Download size={14} className="mr-1" />
-                            Baixar
-                          </>
-                        ) : (
-                          <>
-                            <ShoppingCart size={14} className="mr-1" />
-                            Comprar
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </motion.div>
-              ))
+                  </motion.div>
+                );
+              })
             )}
           </div>
         ) : (
@@ -483,6 +482,26 @@ const PDFStore = () => {
 
       <BottomNavigation />
 
+      {/* Loading Splash */}
+      <AnimatePresence>
+        {showLoadingSplash && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-background z-50 flex flex-col items-center justify-center"
+          >
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+              className="w-16 h-16 rounded-full border-4 border-muted border-t-primary mb-6"
+            />
+            <p className="text-foreground font-semibold text-lg">Gerando referência...</p>
+            <p className="text-muted-foreground text-sm mt-2">Aguarde um momento...</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Create Product Modal */}
       <AnimatePresence>
         {showCreateModal && (
@@ -502,10 +521,7 @@ const PDFStore = () => {
             >
               <div className="flex items-center justify-between mb-6">
                 <h3 className="font-bold text-lg text-foreground">Publicar PDF</h3>
-                <button 
-                  onClick={() => setShowCreateModal(false)}
-                  className="text-muted-foreground hover:text-foreground"
-                >
+                <button onClick={() => setShowCreateModal(false)} className="text-muted-foreground hover:text-foreground">
                   <X size={20} />
                 </button>
               </div>
@@ -513,80 +529,39 @@ const PDFStore = () => {
               <div className="space-y-4">
                 <div>
                   <label className="text-sm text-muted-foreground block mb-1.5">Título *</label>
-                  <Input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Nome do seu PDF"
-                    className="bg-secondary border-border text-foreground"
-                  />
+                  <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nome do seu PDF" className="bg-secondary border-border text-foreground" />
                 </div>
-
                 <div>
                   <label className="text-sm text-muted-foreground block mb-1.5">Descrição</label>
-                  <Textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Descreva o conteúdo..."
-                    className="bg-secondary border-border text-foreground resize-none"
-                    rows={3}
-                  />
+                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descreva o conteúdo..." className="bg-secondary border-border text-foreground resize-none" rows={3} />
                 </div>
-
                 <div>
                   <label className="text-sm text-muted-foreground block mb-1.5">Preço (AOA) *</label>
-                  <Input
-                    type="number"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    placeholder="Ex: 500"
-                    className="bg-secondary border-border text-foreground"
-                  />
+                  <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Ex: 500" className="bg-secondary border-border text-foreground" />
                 </div>
-
                 <div>
                   <label className="text-sm text-muted-foreground block mb-1.5">Imagem de Capa</label>
                   <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/50 transition-colors">
                     <ImageIcon size={20} className="text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">
-                      {coverImage ? coverImage.name : 'Selecionar imagem'}
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setCoverImage(e.target.files?.[0] || null)}
-                      className="hidden"
-                    />
+                    <span className="text-sm text-muted-foreground">{coverImage ? coverImage.name : 'Selecionar imagem'}</span>
+                    <input type="file" accept="image/*" onChange={(e) => setCoverImage(e.target.files?.[0] || null)} className="hidden" />
                   </label>
                 </div>
-
                 <div>
                   <label className="text-sm text-muted-foreground block mb-1.5">Arquivo PDF *</label>
                   <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/50 transition-colors">
                     <Upload size={20} className="text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">
-                      {pdfFile ? pdfFile.name : 'Selecionar arquivo'}
-                    </span>
-                    <input
-                      type="file"
-                      accept=".pdf"
-                      onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-                      className="hidden"
-                    />
+                    <span className="text-sm text-muted-foreground">{pdfFile ? pdfFile.name : 'Selecionar arquivo'}</span>
+                    <input type="file" accept=".pdf" onChange={(e) => setPdfFile(e.target.files?.[0] || null)} className="hidden" />
                   </label>
                 </div>
-
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
                   <p className="text-amber-700 text-xs flex items-center gap-1">
                     <AlertTriangle size={14} />
                     Seu PDF será enviado para aprovação. 15% do valor de cada venda é retido como taxa.
                   </p>
                 </div>
-
-                <Button
-                  onClick={handleCreateProduct}
-                  disabled={uploading || !title || !price || !pdfFile}
-                  className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md"
-                >
+                <Button onClick={handleCreateProduct} disabled={uploading || !title || !price || !pdfFile} className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md">
                   {uploading ? 'Enviando...' : 'Enviar para Aprovação'}
                 </Button>
               </div>
@@ -595,9 +570,9 @@ const PDFStore = () => {
         )}
       </AnimatePresence>
 
-      {/* Purchase Modal */}
+      {/* Purchase Reference Modal - shows entity + reference directly */}
       <AnimatePresence>
-        {showPurchaseModal && selectedProduct && (
+        {showPurchaseInfo && pendingPurchase && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -611,10 +586,13 @@ const PDFStore = () => {
               className="bg-white border border-border rounded-2xl w-full max-w-md p-6 shadow-xl"
             >
               <div className="flex items-center justify-between mb-5">
-                <h3 className="font-bold text-lg text-foreground">Comprar PDF</h3>
+                <h3 className="font-bold text-lg text-foreground">
+                  {pendingPurchase.status === "completed" ? "Pago!" : 
+                   pendingPurchase.status === "failed" ? "Não Pago" : "Aguardando Pagamento"}
+                </h3>
                 <button 
                   onClick={() => {
-                    setShowPurchaseModal(false);
+                    setShowPurchaseInfo(false);
                     setPendingPurchase(null);
                     if (pollRef.current) clearInterval(pollRef.current);
                   }}
@@ -624,127 +602,86 @@ const PDFStore = () => {
                 </button>
               </div>
 
-              {!pendingPurchase ? (
-                <>
-                  {/* Product info */}
-                  <div className="flex gap-3 mb-4 p-3 bg-secondary rounded-xl">
-                    <div className="w-12 h-16 rounded-lg overflow-hidden bg-primary/10 flex-shrink-0">
-                      {selectedProduct.cover_image_url ? (
-                        <img src={selectedProduct.cover_image_url} alt={selectedProduct.title} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <FileText className="text-primary" size={20} />
-                        </div>
-                      )}
+              <div className="text-center space-y-4">
+                {pendingPurchase.status === "pending" && (
+                  <>
+                    <div className="w-16 h-16 mx-auto rounded-full bg-amber-100 flex items-center justify-center">
+                      <Clock size={28} className="text-amber-600" />
                     </div>
-                    <div>
-                      <h4 className="font-semibold text-foreground text-sm">{selectedProduct.title}</h4>
-                      <p className="text-primary font-bold mt-1">{selectedProduct.price.toLocaleString('pt-AO')} AOA</p>
+                    
+                    <div className="text-left">
+                      <p className="text-sm text-muted-foreground mb-2">Produto: <strong className="text-foreground">{pendingPurchase.productTitle}</strong></p>
                     </div>
-                  </div>
 
-                  {/* Payment method info */}
-                  <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CreditCard size={16} className="text-emerald-600" />
-                      <span className="font-semibold text-emerald-700 text-sm">Pagamento por Referência</span>
+                    <div className="bg-secondary rounded-xl p-4 text-left space-y-3">
+                      <div>
+                        <span className="text-xs text-muted-foreground">Entidade</span>
+                        <p className="font-mono font-bold text-foreground text-lg">{pendingPurchase.entity}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted-foreground">Referência</span>
+                        <p className="font-mono font-bold text-foreground text-lg">{pendingPurchase.reference}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted-foreground">Valor</span>
+                        <p className="font-mono font-bold text-primary text-lg">{pendingPurchase.amount.toLocaleString('pt-AO')} AOA</p>
+                      </div>
                     </div>
-                    <p className="text-emerald-600 text-xs">
-                      Entidade: {ENTITY_CODE} - Pague via Multicaixa Express ou PayPay África
-                    </p>
-                  </div>
 
-                  <div className="mb-4">
-                    <label className="text-sm text-muted-foreground block mb-1.5">Número de telefone</label>
-                    <Input
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      placeholder="923 000 000"
-                      className="bg-secondary border-border text-foreground"
-                    />
-                  </div>
-
-                  <Button
-                    onClick={initiatePurchase}
-                    disabled={processing}
-                    className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md"
-                  >
-                    {processing ? 'Processando...' : `Pagar ${selectedProduct.price.toLocaleString('pt-AO')} AOA`}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  {/* Payment pending/result */}
-                  <div className="text-center space-y-4">
-                    {pendingPurchase.status === "pending" && (
-                      <>
-                        <div className="w-16 h-16 mx-auto rounded-full bg-amber-100 flex items-center justify-center">
-                          <Clock size={28} className="text-amber-600" />
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-foreground">Aguardando Pagamento</h4>
-                          <p className="text-sm text-muted-foreground mt-1">Pague com os dados abaixo</p>
-                        </div>
-
-                        <div className="bg-secondary rounded-xl p-4 text-left space-y-3">
-                          <div>
-                            <span className="text-xs text-muted-foreground">Entidade</span>
-                            <p className="font-mono font-bold text-foreground text-lg">{pendingPurchase.entity}</p>
-                          </div>
-                          <div>
-                            <span className="text-xs text-muted-foreground">Referência</span>
-                            <p className="font-mono font-bold text-foreground text-lg">{pendingPurchase.reference}</p>
-                          </div>
-                          <div>
-                            <span className="text-xs text-muted-foreground">Valor</span>
-                            <p className="font-mono font-bold text-primary text-lg">{pendingPurchase.amount.toLocaleString('pt-AO')} AOA</p>
-                          </div>
-                        </div>
-
-                        <p className="text-xs text-muted-foreground">
-                          {checkingPayment ? "Verificando pagamento..." : "O sistema verificará automaticamente quando pagar"}
-                        </p>
-                      </>
-                    )}
-
-                    {pendingPurchase.status === "completed" && (
-                      <>
-                        <div className="w-16 h-16 mx-auto rounded-full bg-emerald-100 flex items-center justify-center">
-                          <CheckCircle size={28} className="text-emerald-600" />
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-foreground">Pago</h4>
-                          <p className="text-sm text-muted-foreground">Seu PDF está sendo baixado</p>
-                        </div>
-                      </>
-                    )}
-
-                    {pendingPurchase.status === "failed" && (
-                      <>
-                        <div className="w-16 h-16 mx-auto rounded-full bg-red-100 flex items-center justify-center">
-                          <XCircle size={28} className="text-red-600" />
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-foreground">Não Pago</h4>
-                          <p className="text-sm text-muted-foreground">O pagamento expirou ou foi cancelado</p>
-                        </div>
-                      </>
-                    )}
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                      <p className="text-amber-700 text-xs">
+                        {checkingPayment ? "⏳ Verificando pagamento..." : "⏳ Pague via Multicaixa Express ou PayPay África. O sistema verificará automaticamente."}
+                      </p>
+                    </div>
 
                     <Button
-                      variant="outline"
                       onClick={() => {
-                        setShowPurchaseModal(false);
-                        setPendingPurchase(null);
-                        if (pollRef.current) clearInterval(pollRef.current);
+                        navigator.clipboard.writeText(`Entidade: ${pendingPurchase.entity}\nReferência: ${pendingPurchase.reference}\nValor: ${pendingPurchase.amount} AOA`);
+                        toast.success("Dados copiados!");
                       }}
+                      variant="outline"
                       className="w-full"
                     >
-                      Fechar
+                      Copiar Dados
                     </Button>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
+
+                {pendingPurchase.status === "completed" && (
+                  <>
+                    <div className="w-16 h-16 mx-auto rounded-full bg-emerald-100 flex items-center justify-center">
+                      <CheckCircle size={28} className="text-emerald-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-foreground">Pagamento Confirmado!</h4>
+                      <p className="text-sm text-muted-foreground">Seu PDF está sendo baixado automaticamente</p>
+                    </div>
+                  </>
+                )}
+
+                {pendingPurchase.status === "failed" && (
+                  <>
+                    <div className="w-16 h-16 mx-auto rounded-full bg-red-100 flex items-center justify-center">
+                      <XCircle size={28} className="text-red-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-foreground">Pagamento Expirado</h4>
+                      <p className="text-sm text-muted-foreground">O pagamento expirou ou foi cancelado</p>
+                    </div>
+                  </>
+                )}
+
+                <Button
+                  onClick={() => {
+                    setShowPurchaseInfo(false);
+                    setPendingPurchase(null);
+                    if (pollRef.current) clearInterval(pollRef.current);
+                  }}
+                  className="w-full bg-primary hover:bg-primary/90 text-white"
+                >
+                  Fechar
+                </Button>
+              </div>
             </motion.div>
           </motion.div>
         )}

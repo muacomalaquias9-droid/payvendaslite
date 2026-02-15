@@ -52,7 +52,6 @@ const Wallet = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showBalance, setShowBalance] = useState(true);
   const [activeTab, setActiveTab] = useState<'cartao' | 'historico'>('cartao');
-  const [activatingWallet, setActivatingWallet] = useState(false);
   
   // Deposit/Withdraw modals
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -96,49 +95,7 @@ const Wallet = () => {
     }
   };
 
-  const activateWallet = async () => {
-    if (!user || !profile) return;
-    
-    if (profile.kyc_status !== 'approved') {
-      toast.error("KYC aprovado necessário para ativar a carteira");
-      return;
-    }
-    
-    const totalBalance = (profile.balance || 0) + (profile.bonus_balance || 0);
-    if (totalBalance < 100) {
-      toast.error("Saldo insuficiente. Taxa de ativação: 100 AOA");
-      return;
-    }
-    
-    setActivatingWallet(true);
-    
-    try {
-      const { data: session } = await supabase.auth.getSession();
-      
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/payment-webhook/activate-wallet`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.session?.access_token}`
-        }
-      });
-      
-      const result = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(result.error || 'Erro ao ativar carteira');
-      }
-      
-      toast.success("Carteira ativada com sucesso!");
-      refreshProfile();
-      fetchTransactions();
-    } catch (error: any) {
-      toast.error(error.message || "Erro ao ativar carteira");
-    } finally {
-      setActivatingWallet(false);
-    }
-  };
-
+  // Deposit: no phone input needed, just amount -> loading -> show reference
   const handleDeposit = async () => {
     if (!user || !profile) return;
     
@@ -150,11 +107,6 @@ const Wallet = () => {
 
     if (depositAmount > 1000000) {
       toast.error("Valor máximo de depósito: 1.000.000 AOA");
-      return;
-    }
-
-    if (!phoneNumber || phoneNumber.length < 9) {
-      toast.error("Número de telefone inválido");
       return;
     }
 
@@ -175,8 +127,7 @@ const Wallet = () => {
         body: JSON.stringify({
           type: 'deposit',
           amount: depositAmount,
-          method: selectedMethod.name,
-          phone: phoneNumber
+          method: selectedMethod.name
         })
       });
       
@@ -193,7 +144,6 @@ const Wallet = () => {
       setShowLoadingSplash(false);
       setShowPaymentInfo(true);
       setAmount("");
-      setPhoneNumber("");
       fetchTransactions();
     } catch (error: any) {
       setShowLoadingSplash(false);
@@ -201,6 +151,7 @@ const Wallet = () => {
     }
   };
 
+  // Withdrawal: needs phone number for admin to send money
   const handleWithdraw = async () => {
     if (!user || !profile) return;
     
@@ -221,7 +172,7 @@ const Wallet = () => {
     }
 
     if (!phoneNumber || phoneNumber.length < 9) {
-      toast.error("Número de telefone inválido");
+      toast.error("Número de telefone obrigatório para levantamento");
       return;
     }
 
@@ -257,7 +208,7 @@ const Wallet = () => {
       toast.success(
         <div className="space-y-2">
           <p className="font-semibold">Levantamento solicitado!</p>
-          <p className="text-xs">Seu saque de {withdrawAmount.toLocaleString('pt-AO')} AOA será processado pelo administrador e cairá na sua conta {selectedMethod.name}.</p>
+          <p className="text-xs">Seu saque de {withdrawAmount.toLocaleString('pt-AO')} AOA será processado pelo administrador e cairá na sua conta {selectedMethod.name} ({phoneNumber}).</p>
         </div>,
         { duration: 10000 }
       );
@@ -310,8 +261,7 @@ const Wallet = () => {
   };
 
   const balance = profile?.balance || 0;
-  const isWalletActive = true; // Wallet is always active for all users
-  const canActivate = false;
+  const isWalletActive = true;
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -349,7 +299,6 @@ const Wallet = () => {
             <div className="grid grid-cols-2 gap-3">
               <Button 
                 className="bg-white text-primary hover:bg-white/90 h-11 font-semibold shadow-md"
-                disabled={!isWalletActive}
                 onClick={() => setShowDepositModal(true)}
               >
                 <ArrowDownLeft size={16} className="mr-2" />
@@ -357,7 +306,6 @@ const Wallet = () => {
               </Button>
               <Button 
                 className="bg-white/20 text-white hover:bg-white/30 border border-white/30 h-11 font-semibold"
-                disabled={!isWalletActive}
                 onClick={() => setShowWithdrawModal(true)}
               >
                 <ArrowUpRight size={16} className="mr-2" />
@@ -401,11 +349,7 @@ const Wallet = () => {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`rounded-2xl p-5 relative overflow-hidden ${
-                isWalletActive 
-                  ? 'bg-gradient-to-br from-foreground via-foreground/90 to-foreground/80 border border-primary/30'
-                  : 'bg-secondary border border-border'
-              }`}
+              className="bg-gradient-to-br from-foreground via-foreground/90 to-foreground/80 rounded-2xl p-5 relative overflow-hidden border border-primary/30"
               style={{ aspectRatio: '1.586' }}
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2" />
@@ -414,94 +358,49 @@ const Wallet = () => {
                 <div className="flex items-start justify-between">
                   <img src={payvendasLogo} alt="PayVendas" className="h-6" />
                   <div className="flex items-center gap-1">
-                    <Wifi size={14} className={isWalletActive ? 'text-primary' : 'text-muted-foreground'} />
+                    <Wifi size={14} className="text-primary" />
                   </div>
                 </div>
 
                 <div className="mt-4">
-                  <div className={`w-10 h-7 rounded ${isWalletActive ? 'bg-gradient-to-br from-amber-300 to-amber-500' : 'bg-muted'}`}>
+                  <div className="w-10 h-7 rounded bg-gradient-to-br from-amber-300 to-amber-500">
                     <div className="w-full h-full grid grid-cols-3 grid-rows-3 gap-px p-0.5">
                       {[...Array(9)].map((_, i) => (
-                        <div key={i} className={`rounded-[1px] ${isWalletActive ? 'bg-amber-600/50' : 'bg-muted-foreground/30'}`} />
+                        <div key={i} className="rounded-[1px] bg-amber-600/50" />
                       ))}
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-auto">
-                  <div className={`text-[10px] uppercase mb-0.5 ${isWalletActive ? 'text-white/60' : 'text-muted-foreground'}`}>IBAN Virtual</div>
+                  <div className="text-[10px] uppercase mb-0.5 text-white/60">IBAN Virtual</div>
                   <div className="flex items-center gap-2">
-                    <code className={`text-sm font-mono ${isWalletActive ? 'text-white' : 'text-muted-foreground'}`}>
-                      {isWalletActive ? (profile?.iban_virtual || '••••••••••••••••') : '••••••••••••••••'}
+                    <code className="text-sm font-mono text-white">
+                      {profile?.iban_virtual || '••••••••••••••••'}
                     </code>
-                    {isWalletActive && (
-                      <button 
-                        onClick={copyIban}
-                        className="p-1 hover:bg-white/10 rounded transition-colors"
-                      >
-                        {copied ? <CheckCircle size={14} className="text-primary" /> : <Copy size={14} className="text-white/60" />}
-                      </button>
-                    )}
+                    <button 
+                      onClick={copyIban}
+                      className="p-1 hover:bg-white/10 rounded transition-colors"
+                    >
+                      {copied ? <CheckCircle size={14} className="text-primary" /> : <Copy size={14} className="text-white/60" />}
+                    </button>
                   </div>
                 </div>
 
                 <div className="flex items-end justify-between mt-3">
                   <div>
-                    <div className={`text-[10px] uppercase ${isWalletActive ? 'text-white/60' : 'text-muted-foreground'}`}>Titular</div>
-                    <div className={`text-xs font-medium ${isWalletActive ? 'text-white' : 'text-muted-foreground'}`}>
-                      {isWalletActive ? (profile?.full_name || 'NOME DO TITULAR') : '••••••••••'}
+                    <div className="text-[10px] uppercase text-white/60">Titular</div>
+                    <div className="text-xs font-medium text-white">
+                      {profile?.full_name || 'NOME DO TITULAR'}
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className={`text-[10px] uppercase ${isWalletActive ? 'text-white/60' : 'text-muted-foreground'}`}>Status</div>
-                    <div className={`text-xs font-medium ${isWalletActive ? 'text-primary' : 'text-muted-foreground'}`}>
-                      {isWalletActive ? 'ATIVO' : 'INATIVO'}
-                    </div>
+                    <div className="text-[10px] uppercase text-white/60">Status</div>
+                    <div className="text-xs font-medium text-primary">ATIVO</div>
                   </div>
                 </div>
-
-                {!isWalletActive && (
-                  <div className="absolute inset-0 bg-background/50 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                    <Lock size={32} className="text-muted-foreground" />
-                  </div>
-                )}
               </div>
             </motion.div>
-
-            {/* Activation Card - Hidden since wallet is always active */}
-            {false && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="bg-white border border-border rounded-xl p-4 shadow-sm"
-              >
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <CreditCard className="text-primary" size={20} />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground mb-1">Ativar Cartão Virtual</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Ative sua carteira para depositar, levantar e receber chuvas. Taxa única de 100 AOA.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 mb-4 text-xs text-muted-foreground">
-                  <Shield size={14} className="text-primary" />
-                  <span>KYC aprovado necessário</span>
-                </div>
-
-                <Button 
-                  className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md"
-                  onClick={activateWallet}
-                  disabled={!canActivate || activatingWallet}
-                >
-                  {activatingWallet ? 'Ativando...' : 'Ativar Carteira (100 AOA)'}
-                </Button>
-              </motion.div>
-            )}
           </div>
         ) : (
           /* Transaction History */
@@ -593,7 +492,7 @@ const Wallet = () => {
         )}
       </AnimatePresence>
 
-      {/* Deposit Modal */}
+      {/* Deposit Modal - NO phone input, just amount */}
       <AnimatePresence>
         {showDepositModal && (
           <motion.div
@@ -618,6 +517,17 @@ const Wallet = () => {
               </div>
 
               <div className="space-y-4">
+                {/* Payment info */}
+                <div className="bg-primary/5 border border-primary/20 rounded-xl p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CreditCard size={16} className="text-primary" />
+                    <span className="font-semibold text-foreground text-sm">Pagamento por Referência</span>
+                  </div>
+                  <p className="text-muted-foreground text-xs">
+                    Uma referência será gerada automaticamente. Pague via Multicaixa Express ou PayPay África.
+                  </p>
+                </div>
+
                 <div>
                   <label className="text-sm text-muted-foreground block mb-2">Método de Pagamento</label>
                   <div className="space-y-2">
@@ -651,23 +561,12 @@ const Wallet = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="text-sm text-muted-foreground block mb-1.5">Número de Telefone</label>
-                  <Input
-                    type="tel"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    placeholder="Ex: 923456789"
-                    className="bg-secondary border-border text-foreground"
-                  />
-                </div>
-
                 <Button
                   onClick={handleDeposit}
-                  disabled={processing}
+                  disabled={processing || !amount}
                   className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md"
                 >
-                  {processing ? 'Processando...' : 'Confirmar Depósito'}
+                  Gerar Referência de Pagamento
                 </Button>
               </div>
             </motion.div>
@@ -675,7 +574,7 @@ const Wallet = () => {
         )}
       </AnimatePresence>
 
-      {/* Withdraw Modal */}
+      {/* Withdraw Modal - phone input needed for admin to send money */}
       <AnimatePresence>
         {showWithdrawModal && (
           <motion.div
@@ -708,7 +607,7 @@ const Wallet = () => {
                 </div>
 
                 <div>
-                  <label className="text-sm text-muted-foreground block mb-2">Método de Pagamento</label>
+                  <label className="text-sm text-muted-foreground block mb-2">Receber via</label>
                   <div className="space-y-2">
                     {PAYMENT_METHODS.map((method) => (
                       <button
@@ -741,7 +640,7 @@ const Wallet = () => {
                 </div>
 
                 <div>
-                  <label className="text-sm text-muted-foreground block mb-1.5">Número de Telefone</label>
+                  <label className="text-sm text-muted-foreground block mb-1.5">Número para receber</label>
                   <Input
                     type="tel"
                     value={phoneNumber}
@@ -749,14 +648,17 @@ const Wallet = () => {
                     placeholder="Ex: 923456789"
                     className="bg-secondary border-border text-foreground"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    O valor será enviado para este número via {selectedMethod.name}
+                  </p>
                 </div>
 
                 <Button
                   onClick={handleWithdraw}
-                  disabled={processing}
+                  disabled={processing || !amount || !phoneNumber}
                   className="w-full h-11 bg-amber-500 hover:bg-amber-600 text-white font-semibold shadow-md"
                 >
-                  {processing ? 'Processando...' : 'Confirmar Levantamento'}
+                  Solicitar Levantamento
                 </Button>
               </div>
             </motion.div>
@@ -793,7 +695,7 @@ const Wallet = () => {
               <div className="space-y-3 bg-secondary rounded-xl p-4 text-left mb-5">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Entidade</span>
-                  <span className="font-bold text-foreground font-mono">{paymentEntity}</span>
+                  <span className="font-bold text-foreground font-mono text-lg">{paymentEntity}</span>
                 </div>
                 <div className="border-t border-border" />
                 <div className="flex justify-between items-center">
@@ -803,13 +705,15 @@ const Wallet = () => {
                 <div className="border-t border-border" />
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Valor</span>
-                  <span className="font-bold text-foreground">{paymentAmount.toLocaleString('pt-AO')} AOA</span>
+                  <span className="font-bold text-primary font-mono">{paymentAmount.toLocaleString('pt-AO')} AOA</span>
                 </div>
               </div>
 
-              <p className="text-xs text-muted-foreground mb-4">
-                Após o pagamento, o saldo será creditado automaticamente na sua conta.
-              </p>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+                <p className="text-amber-700 text-xs">
+                  ⏳ Pendente - Após o pagamento no Multicaixa Express ou PayPay África, o saldo será creditado automaticamente.
+                </p>
+              </div>
 
               <Button
                 onClick={() => {
