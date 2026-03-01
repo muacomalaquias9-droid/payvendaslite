@@ -12,10 +12,15 @@ import {
   XCircle,
   CreditCard,
   Image as ImageIcon,
-  AlertTriangle
+  AlertTriangle,
+  User,
+  Mail,
+  Phone,
+  Shield
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -64,6 +69,13 @@ const PDFStore = () => {
   const [checkingPayment, setCheckingPayment] = useState(false);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   
+  // Checkout form state
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [checkoutProduct, setCheckoutProduct] = useState<PDFProduct | null>(null);
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
+  
   // Create form state
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -74,10 +86,17 @@ const PDFStore = () => {
 
   useEffect(() => {
     fetchProducts();
+    if (user) {
+      if (user.email) setClientEmail(user.email);
+    }
+    if (profile) {
+      setClientName(profile.full_name || "");
+      setClientPhone(profile.phone?.replace("+244", "") || "");
+    }
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [user]);
+  }, [user, profile]);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -204,11 +223,33 @@ const PDFStore = () => {
       return;
     }
 
-    // Show loading splash immediately, generate reference
+    // Show checkout modal first
+    setCheckoutProduct(product);
+    setShowCheckoutModal(true);
+  };
+
+  const handleCheckoutSubmit = async () => {
+    if (!checkoutProduct || !user) return;
+
+    if (!clientName.trim()) {
+      toast.error("Nome completo é obrigatório");
+      return;
+    }
+    if (!clientEmail.trim() || !clientEmail.includes("@")) {
+      toast.error("Email válido é obrigatório");
+      return;
+    }
+    if (!clientPhone.trim() || clientPhone.replace(/\D/g, "").length < 9) {
+      toast.error("Número de telefone válido é obrigatório");
+      return;
+    }
+
+    setShowCheckoutModal(false);
     setShowLoadingSplash(true);
 
     try {
       const { data: session } = await supabase.auth.getSession();
+      const phoneFormatted = clientPhone.replace(/\D/g, "");
       
       const response = await fetch(`${SUPABASE_URL}/functions/v1/payment-webhook/purchase-pdf`, {
         method: 'POST',
@@ -217,7 +258,10 @@ const PDFStore = () => {
           'Authorization': `Bearer ${session?.session?.access_token}`
         },
         body: JSON.stringify({
-          product_id: product.id
+          product_id: checkoutProduct.id,
+          client_name: clientName.trim(),
+          client_email: clientEmail.trim(),
+          client_phone: phoneFormatted
         })
       });
 
@@ -225,8 +269,8 @@ const PDFStore = () => {
 
       if (!response.ok) {
         if (result.already_purchased) {
-          if (product.file_url) {
-            downloadPDF(product.file_url, product.title);
+          if (checkoutProduct.file_url) {
+            downloadPDF(checkoutProduct.file_url, checkoutProduct.title);
           }
           setShowLoadingSplash(false);
           return;
@@ -238,17 +282,17 @@ const PDFStore = () => {
 
       setPendingPurchase({
         transactionId: result.transaction_id,
-        productId: product.id,
-        productTitle: product.title,
+        productId: checkoutProduct.id,
+        productTitle: checkoutProduct.title,
         reference: result.reference,
         entity: result.entity || ENTITY_CODE,
-        amount: product.price,
+        amount: checkoutProduct.price,
         status: "pending"
       });
       setShowPurchaseInfo(true);
 
       // Start polling for payment status
-      startPaymentPolling(result.transaction_id, product);
+      startPaymentPolling(result.transaction_id, checkoutProduct);
 
     } catch (error: any) {
       setShowLoadingSplash(false);
@@ -481,6 +525,79 @@ const PDFStore = () => {
       </div>
 
       <BottomNavigation />
+
+      {/* Checkout Modal */}
+      <AnimatePresence>
+        {showCheckoutModal && checkoutProduct && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end justify-center p-4"
+            onClick={() => setShowCheckoutModal(false)}
+          >
+            <motion.div
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white border border-border rounded-2xl w-full max-w-md p-6 shadow-xl max-h-[85vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-lg text-foreground">Checkout</h3>
+                <button onClick={() => setShowCheckoutModal(false)} className="text-muted-foreground hover:text-foreground">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="bg-secondary rounded-xl p-3 mb-4">
+                <p className="text-sm font-semibold text-foreground">{checkoutProduct.title}</p>
+                <p className="text-lg font-bold text-primary">{checkoutProduct.price.toLocaleString('pt-AO')} AOA</p>
+              </div>
+
+              <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 mb-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Shield size={16} className="text-primary" />
+                  <span className="font-semibold text-foreground text-sm">Checkout Seguro</span>
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  Preencha seus dados para gerar a referência de pagamento.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-sm text-muted-foreground flex items-center gap-1.5 mb-1.5">
+                    <User size={14} /> Nome Completo *
+                  </Label>
+                  <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Seu nome completo" className="bg-secondary border-border text-foreground" />
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground flex items-center gap-1.5 mb-1.5">
+                    <Mail size={14} /> Email *
+                  </Label>
+                  <Input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="seu@email.com" className="bg-secondary border-border text-foreground" />
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground flex items-center gap-1.5 mb-1.5">
+                    <Phone size={14} /> Número de Telefone *
+                  </Label>
+                  <Input type="tel" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="923456789" className="bg-secondary border-border text-foreground" />
+                </div>
+              </div>
+
+              <Button
+                onClick={handleCheckoutSubmit}
+                disabled={!clientName || !clientEmail || !clientPhone}
+                className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md mt-4"
+              >
+                <CreditCard size={16} className="mr-2" />
+                Gerar Referência de Pagamento
+              </Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Loading Splash */}
       <AnimatePresence>

@@ -16,10 +16,14 @@ import {
   Lock,
   X,
   Smartphone,
-  Banknote
+  Banknote,
+  User,
+  Mail,
+  Phone
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -64,14 +68,26 @@ const Wallet = () => {
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [selectedMethod, setSelectedMethod] = useState(PAYMENT_METHODS[0]);
   const [amount, setAmount] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
   const [processing, setProcessing] = useState(false);
+
+  // Checkout form fields
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
 
   useEffect(() => {
     if (user) {
       fetchTransactions();
+      // Pre-fill from profile
+      if (profile) {
+        setClientName(profile.full_name || "");
+        setClientPhone(profile.phone?.replace("+244", "") || "");
+      }
+      if (user.email) {
+        setClientEmail(user.email);
+      }
     }
-  }, [user]);
+  }, [user, profile]);
 
   const fetchTransactions = async () => {
     const { data } = await supabase
@@ -95,7 +111,23 @@ const Wallet = () => {
     }
   };
 
-  // Deposit: no phone input needed, just amount -> loading -> show reference
+  const validateCheckoutForm = () => {
+    if (!clientName.trim()) {
+      toast.error("Nome completo é obrigatório");
+      return false;
+    }
+    if (!clientEmail.trim() || !clientEmail.includes("@")) {
+      toast.error("Email válido é obrigatório");
+      return false;
+    }
+    if (!clientPhone.trim() || clientPhone.replace(/\D/g, "").length < 9) {
+      toast.error("Número de telefone válido é obrigatório");
+      return false;
+    }
+    return true;
+  };
+
+  // Deposit: checkout form -> loading -> show reference
   const handleDeposit = async () => {
     if (!user || !profile) return;
     
@@ -104,19 +136,19 @@ const Wallet = () => {
       toast.error("Valor mínimo de depósito: 12 AOA");
       return;
     }
-
     if (depositAmount > 1000000) {
       toast.error("Valor máximo de depósito: 1.000.000 AOA");
       return;
     }
+    if (!validateCheckoutForm()) return;
 
-    // Close deposit modal and show loading splash
     setShowDepositModal(false);
     setShowLoadingSplash(true);
     setLoadingMessage("Gerando referência de pagamento...");
 
     try {
       const { data: session } = await supabase.auth.getSession();
+      const phoneFormatted = clientPhone.replace(/\D/g, "");
       
       const response = await fetch(`${SUPABASE_URL}/functions/v1/payment-webhook/initiate`, {
         method: 'POST',
@@ -127,7 +159,10 @@ const Wallet = () => {
         body: JSON.stringify({
           type: 'deposit',
           amount: depositAmount,
-          method: selectedMethod.name
+          method: selectedMethod.name,
+          client_name: clientName.trim(),
+          client_email: clientEmail.trim(),
+          client_phone: phoneFormatted
         })
       });
       
@@ -137,7 +172,6 @@ const Wallet = () => {
         throw new Error(result.error || 'Erro ao processar depósito');
       }
 
-      // Show payment reference info
       setPaymentReference(result.reference || result.plinqpay_id || '');
       setPaymentEntity(result.entity || '01055');
       setPaymentAmount(depositAmount);
@@ -151,7 +185,7 @@ const Wallet = () => {
     }
   };
 
-  // Withdrawal: needs phone number for admin to send money
+  // Withdrawal: checkout form -> loading -> confirm
   const handleWithdraw = async () => {
     if (!user || !profile) return;
     
@@ -160,29 +194,23 @@ const Wallet = () => {
       toast.error("Valor mínimo de levantamento: 200 AOA");
       return;
     }
-
     if (withdrawAmount > 200000) {
       toast.error("Valor máximo de levantamento: 200.000 AOA");
       return;
     }
-
     if ((profile.balance || 0) < withdrawAmount) {
       toast.error("Saldo insuficiente");
       return;
     }
+    if (!validateCheckoutForm()) return;
 
-    if (!phoneNumber || phoneNumber.length < 9) {
-      toast.error("Número de telefone obrigatório para levantamento");
-      return;
-    }
-
-    // Close withdraw modal and show loading splash
     setShowWithdrawModal(false);
     setShowLoadingSplash(true);
     setLoadingMessage("Processando levantamento...");
 
     try {
       const { data: session } = await supabase.auth.getSession();
+      const phoneFormatted = clientPhone.replace(/\D/g, "");
       
       const response = await fetch(`${SUPABASE_URL}/functions/v1/payment-webhook/initiate`, {
         method: 'POST',
@@ -194,7 +222,9 @@ const Wallet = () => {
           type: 'withdrawal',
           amount: withdrawAmount,
           method: selectedMethod.name,
-          phone: phoneNumber
+          client_name: clientName.trim(),
+          client_email: clientEmail.trim(),
+          client_phone: phoneFormatted
         })
       });
       
@@ -208,13 +238,12 @@ const Wallet = () => {
       toast.success(
         <div className="space-y-2">
           <p className="font-semibold">Levantamento solicitado!</p>
-          <p className="text-xs">Seu saque de {withdrawAmount.toLocaleString('pt-AO')} AOA será processado pelo administrador e cairá na sua conta {selectedMethod.name} ({phoneNumber}).</p>
+          <p className="text-xs">Seu saque de {withdrawAmount.toLocaleString('pt-AO')} AOA será processado pelo administrador para {clientName} ({clientPhone}) via {selectedMethod.name}.</p>
         </div>,
         { duration: 10000 }
       );
 
       setAmount("");
-      setPhoneNumber("");
       refreshProfile();
       fetchTransactions();
     } catch (error: any) {
@@ -261,7 +290,103 @@ const Wallet = () => {
   };
 
   const balance = profile?.balance || 0;
-  const isWalletActive = true;
+
+  // Checkout form component
+  const CheckoutForm = ({ isWithdraw = false }: { isWithdraw?: boolean }) => (
+    <div className="space-y-3">
+      <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 mb-1">
+        <div className="flex items-center gap-2 mb-1">
+          <Shield size={16} className="text-primary" />
+          <span className="font-semibold text-foreground text-sm">Checkout Seguro</span>
+        </div>
+        <p className="text-muted-foreground text-xs">
+          Preencha seus dados para {isWithdraw ? 'receber o pagamento' : 'gerar a referência de pagamento'}.
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-sm text-muted-foreground flex items-center gap-1.5 mb-1.5">
+          <User size={14} /> Nome Completo *
+        </Label>
+        <Input
+          value={clientName}
+          onChange={(e) => setClientName(e.target.value)}
+          placeholder="Seu nome completo"
+          className="bg-secondary border-border text-foreground"
+        />
+      </div>
+
+      <div>
+        <Label className="text-sm text-muted-foreground flex items-center gap-1.5 mb-1.5">
+          <Mail size={14} /> Email *
+        </Label>
+        <Input
+          type="email"
+          value={clientEmail}
+          onChange={(e) => setClientEmail(e.target.value)}
+          placeholder="seu@email.com"
+          className="bg-secondary border-border text-foreground"
+        />
+      </div>
+
+      <div>
+        <Label className="text-sm text-muted-foreground flex items-center gap-1.5 mb-1.5">
+          <Phone size={14} /> Número de Telefone *
+        </Label>
+        <Input
+          type="tel"
+          value={clientPhone}
+          onChange={(e) => setClientPhone(e.target.value)}
+          placeholder="923456789"
+          className="bg-secondary border-border text-foreground"
+        />
+      </div>
+
+      <div>
+        <Label className="text-sm text-muted-foreground block mb-2">
+          {isWithdraw ? 'Receber via' : 'Método de Pagamento'}
+        </Label>
+        <div className="space-y-2">
+          {PAYMENT_METHODS.map((method) => (
+            <button
+              key={method.id}
+              onClick={() => setSelectedMethod(method)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
+                selectedMethod.id === method.id
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/50'
+              }`}
+            >
+              <div className={`w-10 h-10 rounded-lg ${method.color} flex items-center justify-center p-1.5`}>
+                <img src={method.icon} alt={method.name} className="w-full h-full object-contain" />
+              </div>
+              <span className="text-foreground font-medium">{method.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <Label className="text-sm text-muted-foreground block mb-1.5">Valor (AOA) *</Label>
+        <Input
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder={isWithdraw ? "Mínimo: 200 AOA" : "Mínimo: 12 AOA"}
+          className="bg-secondary border-border text-foreground"
+        />
+      </div>
+
+      {isWithdraw && (
+        <div className="bg-secondary rounded-xl p-3">
+          <div className="text-xs text-muted-foreground mb-1">Saldo Disponível</div>
+          <div className="text-lg font-bold text-foreground">
+            {balance.toLocaleString('pt-AO', { minimumFractionDigits: 2 })} AOA
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -492,7 +617,7 @@ const Wallet = () => {
         )}
       </AnimatePresence>
 
-      {/* Deposit Modal - NO phone input, just amount */}
+      {/* Deposit Modal with Checkout */}
       <AnimatePresence>
         {showDepositModal && (
           <motion.div
@@ -507,74 +632,31 @@ const Wallet = () => {
               animate={{ y: 0 }}
               exit={{ y: 100 }}
               onClick={(e) => e.stopPropagation()}
-              className="liquid-glass rounded-2xl w-full max-w-md p-6 shadow-xl"
+              className="liquid-glass rounded-2xl w-full max-w-md p-6 shadow-xl max-h-[85vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-lg text-foreground">Depositar</h3>
                 <button onClick={() => setShowDepositModal(false)} className="text-muted-foreground hover:text-foreground">
                   <X size={20} />
                 </button>
               </div>
 
-              <div className="space-y-4">
-                {/* Payment info */}
-                <div className="bg-primary/5 border border-primary/20 rounded-xl p-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <CreditCard size={16} className="text-primary" />
-                    <span className="font-semibold text-foreground text-sm">Pagamento por Referência</span>
-                  </div>
-                  <p className="text-muted-foreground text-xs">
-                    Uma referência será gerada automaticamente. Pague via Multicaixa Express ou PayPay África.
-                  </p>
-                </div>
+              <CheckoutForm />
 
-                <div>
-                  <label className="text-sm text-muted-foreground block mb-2">Método de Pagamento</label>
-                  <div className="space-y-2">
-                    {PAYMENT_METHODS.map((method) => (
-                      <button
-                        key={method.id}
-                        onClick={() => setSelectedMethod(method)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
-                          selectedMethod.id === method.id
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/50'
-                        }`}
-                      >
-                        <div className={`w-10 h-10 rounded-lg ${method.color} flex items-center justify-center p-1.5`}>
-                          <img src={method.icon} alt={method.name} className="w-full h-full object-contain" />
-                        </div>
-                        <span className="text-foreground font-medium">{method.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm text-muted-foreground block mb-1.5">Valor (AOA)</label>
-                  <Input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="Mínimo: 12 AOA"
-                    className="bg-secondary border-border text-foreground"
-                  />
-                </div>
-
-                <Button
-                  onClick={handleDeposit}
-                  disabled={processing || !amount}
-                  className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md"
-                >
-                  Gerar Referência de Pagamento
-                </Button>
-              </div>
+              <Button
+                onClick={handleDeposit}
+                disabled={processing || !amount || !clientName || !clientEmail || !clientPhone}
+                className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md mt-4"
+              >
+                <CreditCard size={16} className="mr-2" />
+                Gerar Referência de Pagamento
+              </Button>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Withdraw Modal - phone input needed for admin to send money */}
+      {/* Withdraw Modal with Checkout */}
       <AnimatePresence>
         {showWithdrawModal && (
           <motion.div
@@ -589,78 +671,24 @@ const Wallet = () => {
               animate={{ y: 0 }}
               exit={{ y: 100 }}
               onClick={(e) => e.stopPropagation()}
-              className="liquid-glass rounded-2xl w-full max-w-md p-6 shadow-xl"
+              className="liquid-glass rounded-2xl w-full max-w-md p-6 shadow-xl max-h-[85vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-lg text-foreground">Levantar</h3>
                 <button onClick={() => setShowWithdrawModal(false)} className="text-muted-foreground hover:text-foreground">
                   <X size={20} />
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div className="bg-secondary rounded-xl p-3">
-                  <div className="text-xs text-muted-foreground mb-1">Saldo Disponível</div>
-                  <div className="text-lg font-bold text-foreground">
-                    {balance.toLocaleString('pt-AO', { minimumFractionDigits: 2 })} AOA
-                  </div>
-                </div>
+              <CheckoutForm isWithdraw />
 
-                <div>
-                  <label className="text-sm text-muted-foreground block mb-2">Receber via</label>
-                  <div className="space-y-2">
-                    {PAYMENT_METHODS.map((method) => (
-                      <button
-                        key={method.id}
-                        onClick={() => setSelectedMethod(method)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
-                          selectedMethod.id === method.id
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/50'
-                        }`}
-                      >
-                        <div className={`w-10 h-10 rounded-lg ${method.color} flex items-center justify-center p-1.5`}>
-                          <img src={method.icon} alt={method.name} className="w-full h-full object-contain" />
-                        </div>
-                        <span className="text-foreground font-medium">{method.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm text-muted-foreground block mb-1.5">Valor (AOA)</label>
-                  <Input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="Mínimo: 200 AOA"
-                    className="bg-secondary border-border text-foreground"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm text-muted-foreground block mb-1.5">Número para receber</label>
-                  <Input
-                    type="tel"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    placeholder="Ex: 923456789"
-                    className="bg-secondary border-border text-foreground"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    O valor será enviado para este número via {selectedMethod.name}
-                  </p>
-                </div>
-
-                <Button
-                  onClick={handleWithdraw}
-                  disabled={processing || !amount || !phoneNumber}
-                  className="w-full h-11 bg-amber-500 hover:bg-amber-600 text-white font-semibold shadow-md"
-                >
-                  Solicitar Levantamento
-                </Button>
-              </div>
+              <Button
+                onClick={handleWithdraw}
+                disabled={processing || !amount || !clientName || !clientEmail || !clientPhone}
+                className="w-full h-11 bg-amber-500 hover:bg-amber-600 text-white font-semibold shadow-md mt-4"
+              >
+                Solicitar Levantamento
+              </Button>
             </motion.div>
           </motion.div>
         )}
