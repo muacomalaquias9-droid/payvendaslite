@@ -22,7 +22,7 @@ export const AppHeader = ({ title, showSettings = false }: AppHeaderProps) => {
   return (
     <header className="sticky top-0 z-40 bg-card/95 backdrop-blur-xl border-b border-border">
       <div className="flex items-center justify-between h-14 px-4">
-        <Link to="/trading" className="flex items-center gap-2">
+        <Link to="/loja" className="flex items-center gap-2">
           <img src={biolosLogo} alt="BIOLOS" className="h-7" />
         </Link>
 

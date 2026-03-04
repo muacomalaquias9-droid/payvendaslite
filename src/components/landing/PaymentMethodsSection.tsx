@@ -1,6 +1,5 @@
 import { motion } from "framer-motion";
 import { Lock, ShieldCheck } from "lucide-react";
-import paypayLogo from "@/assets/paypay-logo.webp";
 import multicaixaLogo from "@/assets/multicaixa-logo.webp";
 import pliqpagLogo from "@/assets/pliqpag-logo.png";
 
@@ -8,17 +7,12 @@ const paymentMethods = [
   {
     logo: multicaixaLogo,
     name: "Multicaixa Express",
-    description: "Pagamento instantâneo via Multicaixa Express",
-  },
-  {
-    logo: paypayLogo,
-    name: "PayPay África",
-    description: "Transferências rápidas com PayPay",
+    description: "Pagamento por referência com confirmação automática",
   },
   {
     logo: pliqpagLogo,
-    name: "PliqPag",
-    description: "Pagamentos seguros via referência",
+    name: "PlinqPay",
+    description: "Entidade 01055 com geração de referência em tempo real",
   },
 ];
 
