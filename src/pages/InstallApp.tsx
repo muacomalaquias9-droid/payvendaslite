@@ -106,10 +106,10 @@ const InstallApp = () => {
             )}
 
             <Button
-              onClick={() => navigate("/trading")}
+              onClick={() => navigate("/loja")}
               className="mt-4 bg-[#1e88e5] hover:bg-[#1976d2]"
             >
-              Ir para Trading
+              Ir para Loja
               <ArrowRight size={18} className="ml-2" />
             </Button>
           </>

@@ -8,7 +8,6 @@ import { PWAProvider } from "@/hooks/usePWA";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import Trading from "./pages/Trading";
 import Feed from "./pages/Feed";
 import Profile from "./pages/Profile";
 import Wallet from "./pages/Wallet";
@@ -32,7 +31,6 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
               <Route path="/registro" element={<Register />} />
-              <Route path="/trading" element={<Trading />} />
               <Route path="/feed" element={<Feed />} />
               <Route path="/perfil" element={<Profile />} />
               <Route path="/carteira" element={<Wallet />} />
@@ -41,7 +39,7 @@ const App = () => (
               {/* PWA install page removed */}
               <Route path="/afiliados" element={<Referrals />} />
               <Route path="/admin" element={<Admin />} />
-              <Route path="/dashboard" element={<Trading />} />
+              <Route path="/dashboard" element={<PDFStore />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </TooltipProvider>

@@ -1,12 +1,12 @@
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { TrendingUp, Users, MessageCircle, Wallet, User, ShoppingCart } from "lucide-react";
+import { Users, MessageCircle, Wallet, User, ShoppingCart, HandCoins } from "lucide-react";
 
 const navItems = [
   { path: "/loja", label: "Loja", Icon: ShoppingCart },
-  { path: "/trading", label: "Trading", Icon: TrendingUp },
-  { path: "/feed", label: "Feed", Icon: Users },
   { path: "/carteira", label: "Carteira", Icon: Wallet },
+  { path: "/afiliados", label: "Afiliados", Icon: HandCoins },
+  { path: "/chat", label: "Chat", Icon: MessageCircle },
   { path: "/perfil", label: "Perfil", Icon: User },
 ];
 

@@ -36,12 +36,13 @@ interface PlinqPayTransaction {
 }
 
 interface PlinqPayCallback {
-  id: string;
-  externalId: string;
-  status: "PENDING" | "PAID" | "EXPIRED" | "CANCELLED";
-  amount: number;
+  id?: string;
+  externalId?: string;
+  status?: string;
+  amount?: number;
   reference?: string;
   paidAt?: string;
+  [key: string]: unknown;
 }
 
 function handleCors(req: Request): Response | null {
@@ -96,18 +97,64 @@ async function parsePlinqPayResponse(response: Response) {
   }
 }
 
-async function createPlinqPayReference(payload: PlinqPayTransaction) {
-  const apiKey = PLINQPAY_PUBLIC_KEY || PLINQPAY_SECRET_KEY;
+function extractReference(result: any): string {
+  return String(
+    result?.reference ||
+      result?.data?.reference ||
+      result?.transaction?.reference ||
+      result?.id ||
+      result?.data?.id ||
+      "",
+  ).trim();
+}
 
-  if (!apiKey) {
-    return { ok: false, status: 500, result: { message: "PlinqPay API key não configurada" } };
+function mapPaymentStatus(status: unknown): "paid" | "failed" | "pending" {
+  const normalized = String(status || "").trim().toUpperCase();
+  if (["PAID", "APPROVED", "COMPLETED", "SUCCESS", "SUCCESSFUL"].includes(normalized)) return "paid";
+  if (["EXPIRED", "CANCELLED", "FAILED", "REJECTED", "VOID"].includes(normalized)) return "failed";
+  return "pending";
+}
+
+function extractExternalId(payload: PlinqPayCallback): string {
+  return String(
+    payload?.externalId ||
+      payload?.external_id ||
+      (payload as any)?.data?.externalId ||
+      (payload as any)?.data?.external_id ||
+      (payload as any)?.transaction?.externalId ||
+      (payload as any)?.transaction?.external_id ||
+      "",
+  ).trim();
+}
+
+function extractCallbackStatus(payload: PlinqPayCallback): string {
+  return String(
+    payload?.status ||
+      (payload as any)?.data?.status ||
+      (payload as any)?.transaction?.status ||
+      "",
+  ).trim();
+}
+
+function extractCallbackPaymentId(payload: PlinqPayCallback): string {
+  return String(
+    payload?.id ||
+      (payload as any)?.data?.id ||
+      (payload as any)?.transaction?.id ||
+      "",
+  ).trim();
+}
+
+async function createPlinqPayReference(payload: PlinqPayTransaction) {
+  if (!PLINQPAY_PUBLIC_KEY) {
+    return { ok: false, status: 500, result: { message: "PlinqPay public key não configurada" } };
   }
 
   const plinqpayResponse = await fetch(PLINQPAY_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "api-key": apiKey,
+      "api-key": PLINQPAY_PUBLIC_KEY,
     },
     body: JSON.stringify(payload),
   });
@@ -158,6 +205,7 @@ Deno.serve(async (req) => {
       if (action === "initiate") return await handleInitiate(req);
       if (action === "purchase-pdf") return await handlePurchasePdf(req);
       if (action === "admin-process") return await handleAdminProcess(req);
+      if (action === "external-sales-webhook") return await handleExternalSalesWebhook(req);
       if (action === "purchase-status") {
         const txId = typeof body?.transaction_id === "string" ? body.transaction_id : "";
         if (!txId) return jsonResponse({ error: "transaction_id obrigatório" }, 400);
@@ -168,6 +216,11 @@ Deno.serve(async (req) => {
     // PlinqPay callback
     if (req.method === "POST" && path === "/plinqpay-callback") {
       return await handleCallback(req);
+    }
+
+    // External sales webhook
+    if (req.method === "POST" && path === "/external-sales-webhook") {
+      return await handleExternalSalesWebhook(req);
     }
 
     // Initiate payment (deposit/withdrawal)
@@ -205,6 +258,134 @@ Deno.serve(async (req) => {
 });
 
 // ---- CALLBACK ----
+async function handlePdfPurchaseApproval(transaction: any): Promise<void> {
+  const productId = transaction.description?.match(/product:(\S+)/)?.[1];
+  if (!productId) return;
+
+  const { data: existingPurchase } = await supabase
+    .from("pdf_purchases")
+    .select("id")
+    .eq("user_id", transaction.user_id)
+    .eq("product_id", productId)
+    .limit(1)
+    .maybeSingle();
+
+  const isNewPurchase = !existingPurchase;
+
+  if (isNewPurchase) {
+    await supabase.from("pdf_purchases").insert({
+      user_id: transaction.user_id,
+      product_id: productId,
+      amount: transaction.amount,
+    });
+  }
+
+  const { data: product } = await supabase
+    .from("pdf_products")
+    .select("id, user_id, title, price, downloads_count")
+    .eq("id", productId)
+    .single();
+
+  if (product && isNewPurchase) {
+    await supabase
+      .from("pdf_products")
+      .update({ downloads_count: (product.downloads_count || 0) + 1 })
+      .eq("id", productId);
+
+    const { data: isSellerAdmin } = await supabase.rpc("has_role", {
+      _user_id: product.user_id,
+      _role: "admin",
+    });
+
+    if (!isSellerAdmin) {
+      const { data: sellerProfile } = await supabase
+        .from("profiles")
+        .select("balance")
+        .eq("user_id", product.user_id)
+        .single();
+
+      if (sellerProfile) {
+        await supabase
+          .from("profiles")
+          .update({ balance: (sellerProfile.balance || 0) + product.price * 0.85 })
+          .eq("user_id", product.user_id);
+      }
+    }
+  }
+
+  await supabase.from("notifications").insert({
+    user_id: transaction.user_id,
+    type: "pdf_purchase",
+    title: "Compra Confirmada",
+    message: "Seu pagamento foi confirmado! Pode baixar o PDF agora.",
+  });
+}
+
+async function markTransactionCompleted(transaction: any, paymentId: string): Promise<void> {
+  if (transaction.status === "completed") return;
+
+  await supabase
+    .from("transactions")
+    .update({
+      status: "completed",
+      description: `${transaction.description || "Transação"} - Pago: ${paymentId || "confirmado"}`,
+    })
+    .eq("id", transaction.id);
+
+  if (transaction.type === "deposit") {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("balance")
+      .eq("user_id", transaction.user_id)
+      .single();
+
+    if (profile) {
+      await supabase
+        .from("profiles")
+        .update({ balance: (profile.balance || 0) + transaction.amount })
+        .eq("user_id", transaction.user_id);
+    }
+
+    await supabase.from("notifications").insert({
+      user_id: transaction.user_id,
+      type: "deposit",
+      title: "Depósito Confirmado",
+      message: `Seu depósito de ${transaction.amount.toLocaleString()} AOA foi confirmado!`,
+    });
+  }
+
+  if (transaction.type === "pdf_purchase") {
+    await handlePdfPurchaseApproval(transaction);
+  }
+}
+
+async function markTransactionFailed(transaction: any, statusLabel: string): Promise<void> {
+  if (transaction.status === "failed") return;
+
+  await supabase
+    .from("transactions")
+    .update({
+      status: "failed",
+      description: `${transaction.description || "Transação"} - ${statusLabel || "FAILED"}`,
+    })
+    .eq("id", transaction.id);
+
+  if (transaction.type === "withdrawal") {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("balance")
+      .eq("user_id", transaction.user_id)
+      .single();
+
+    if (profile) {
+      await supabase
+        .from("profiles")
+        .update({ balance: (profile.balance || 0) + transaction.amount })
+        .eq("user_id", transaction.user_id);
+    }
+  }
+}
+
 async function handleCallback(req: Request): Promise<Response> {
   const rawBody = await req.text();
   let payload: PlinqPayCallback;
@@ -223,12 +404,18 @@ async function handleCallback(req: Request): Promise<Response> {
     }
   }
 
-  console.log("PlinqPay callback received:", JSON.stringify(payload));
+  const externalId = extractExternalId(payload);
+  if (!externalId) {
+    return jsonResponse({ error: "externalId não encontrado no callback" }, 400);
+  }
+
+  const paymentStatus = mapPaymentStatus(extractCallbackStatus(payload));
+  const paymentId = extractCallbackPaymentId(payload);
 
   const { data: transaction, error: findError } = await supabase
     .from("transactions")
     .select("*")
-    .eq("id", payload.externalId)
+    .eq("id", externalId)
     .single();
 
   if (findError || !transaction) {
@@ -236,121 +423,63 @@ async function handleCallback(req: Request): Promise<Response> {
     return jsonResponse({ error: "Transaction not found" }, 404);
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("user_id", transaction.user_id)
-    .single();
-
-  if (!profile) {
-    return jsonResponse({ error: "Profile not found" }, 404);
-  }
-
-  if (payload.status === "PAID") {
-    await supabase
-      .from("transactions")
-      .update({ 
-        status: "completed",
-        description: `${transaction.description} - Pago PlinqPay: ${payload.id}`
-      })
-      .eq("id", transaction.id);
-
-    if (transaction.type === "deposit") {
-      const newBalance = (profile.balance || 0) + transaction.amount;
-      await supabase
-        .from("profiles")
-        .update({ balance: newBalance })
-        .eq("user_id", transaction.user_id);
-
-      await supabase
-        .from("notifications")
-        .insert({
-          user_id: transaction.user_id,
-          type: "deposit",
-          title: "Depósito Confirmado",
-          message: `Seu depósito de ${transaction.amount.toLocaleString()} AOA foi confirmado!`
-        });
-    }
-
-    // Handle PDF purchase payment
-    if (transaction.type === "pdf_purchase") {
-      const productId = transaction.description?.match(/product:(\S+)/)?.[1];
-      if (productId) {
-        await supabase.from("pdf_purchases").insert({
-          user_id: transaction.user_id,
-          product_id: productId,
-          amount: transaction.amount
-        });
-
-        const { data: product } = await supabase
-          .from("pdf_products")
-          .select("*")
-          .eq("id", productId)
-          .single();
-
-        if (product) {
-          await supabase.from("pdf_products")
-            .update({ downloads_count: (product.downloads_count || 0) + 1 })
-            .eq("id", productId);
-
-          // Credit seller (85%) - NOT admin accounts
-          const ADMIN_IDS = [
-            'f229039d-552d-4d9f-9d11-3850fc359d9d',
-            'eb7ccf08-a10e-43ed-baf0-aa966fef1090', 
-            '8003e9fa-d2f7-4ab3-a49d-603a780e049e'
-          ];
-          
-          if (!ADMIN_IDS.includes(product.user_id)) {
-            const { data: sellerProfile } = await supabase
-              .from("profiles")
-              .select("balance")
-              .eq("user_id", product.user_id)
-              .single();
-
-            if (sellerProfile) {
-              await supabase.from("profiles")
-                .update({ balance: (sellerProfile.balance || 0) + product.price * 0.85 })
-                .eq("user_id", product.user_id);
-            }
-          }
-        }
-
-        await supabase
-          .from("notifications")
-          .insert({
-            user_id: transaction.user_id,
-            type: "pdf_purchase",
-            title: "Compra Confirmada",
-            message: `Seu pagamento foi confirmado! Pode baixar o PDF agora.`
-          });
-      }
-    }
-
+  if (paymentStatus === "paid") {
+    await markTransactionCompleted(transaction, paymentId);
     return jsonResponse({ success: true, message: "Payment confirmed" });
-  } else if (payload.status === "EXPIRED" || payload.status === "CANCELLED") {
-    await supabase
-      .from("transactions")
-      .update({ 
-        status: "failed",
-        description: `${transaction.description} - ${payload.status}`
-      })
-      .eq("id", transaction.id);
-
-    if (transaction.type === "withdrawal") {
-      const newBalance = (profile.balance || 0) + transaction.amount;
-      await supabase
-        .from("profiles")
-        .update({ balance: newBalance })
-        .eq("user_id", transaction.user_id);
-    }
-
-    return jsonResponse({ success: true, message: "Payment cancelled/expired" });
   }
 
-  return jsonResponse({ success: true, message: "Webhook received" });
+  if (paymentStatus === "failed") {
+    await markTransactionFailed(transaction, extractCallbackStatus(payload));
+    return jsonResponse({ success: true, message: "Payment failed/cancelled" });
+  }
+
+  return jsonResponse({ success: true, message: "Webhook received", status: "pending" });
 }
 
-// ---- INITIATE (deposit/withdrawal) ----
+async function handleExternalSalesWebhook(req: Request): Promise<Response> {
+  const authHeader = req.headers.get("authorization") || "";
+  const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.replace("Bearer ", "") : "";
+  const providedSecret = req.headers.get("x-webhook-secret") || req.headers.get("x-api-key") || bearerToken;
+
+  if (!PLINQPAY_SECRET_KEY || providedSecret !== PLINQPAY_SECRET_KEY) {
+    return jsonResponse({ error: "Unauthorized webhook" }, 401);
+  }
+
+  const payload = await req.json().catch(() => null);
+  if (!payload) {
+    return jsonResponse({ error: "Payload inválido" }, 400);
+  }
+
+  const transactionId = String(payload.transaction_id || payload.external_id || payload.externalId || "").trim();
+  if (!transactionId) {
+    return jsonResponse({ error: "transaction_id obrigatório" }, 400);
+  }
+
+  const status = mapPaymentStatus(payload.status);
+
+  const { data: transaction } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("id", transactionId)
+    .single();
+
+  if (!transaction) {
+    return jsonResponse({ error: "Transaction not found" }, 404);
+  }
+
+  if (status === "paid") {
+    await markTransactionCompleted(transaction, String(payload.payment_id || payload.id || "external"));
+    return jsonResponse({ success: true, status: "completed" });
+  }
+
+  if (status === "failed") {
+    await markTransactionFailed(transaction, String(payload.status || "FAILED"));
+    return jsonResponse({ success: true, status: "failed" });
+  }
+
+  return jsonResponse({ success: true, status: "pending" });
+}
+
 async function handleInitiate(req: Request): Promise<Response> {
   const user = await getAuthUser(req);
   if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
@@ -463,7 +592,7 @@ async function handleInitiate(req: Request): Promise<Response> {
           quantity: 1,
         },
       ],
-      amount: 1,
+      amount,
     };
 
     console.log("Creating PlinqPay transaction:", JSON.stringify(plinqpayPayload));
@@ -482,21 +611,31 @@ async function handleInitiate(req: Request): Promise<Response> {
       }, 400);
     }
 
+    const reference = extractReference(plinqpayResponse.result);
+    if (!reference) {
+      await supabase
+        .from("transactions")
+        .update({ status: "failed", description: `Sem referência retornada: ${JSON.stringify(plinqpayResponse.result)}` })
+        .eq("id", transaction.id);
+
+      return jsonResponse({ error: "Não foi possível gerar referência de pagamento" }, 400);
+    }
+
     await supabase
       .from("transactions")
       .update({
-        description: `Depósito via PlinqPay - Ref: ${plinqpayResponse.result.reference || plinqpayResponse.result.id} - ${clientName}`,
+        description: `Depósito via PlinqPay - Ref: ${reference} - ${clientName}`,
       })
       .eq("id", transaction.id);
 
     return jsonResponse({
       success: true,
       transaction_id: transaction.id,
-      plinqpay_id: plinqpayResponse.result.id,
-      reference: plinqpayResponse.result.reference,
+      plinqpay_id: String(plinqpayResponse.result?.id || ""),
+      reference,
       entity: ENTITY_CODE,
       status: "pending",
-      instructions: `Entidade: ${ENTITY_CODE}\nReferência: ${plinqpayResponse.result.reference || plinqpayResponse.result.id}\nValor: ${amount.toLocaleString()} AOA\n\nPague via Multicaixa Express ou PayPay África.`,
+      instructions: `Entidade: ${ENTITY_CODE}\nReferência: ${reference}\nValor: ${amount.toLocaleString()} AOA\n\nPague a referência para confirmar o depósito.`,
       message: "Siga as instruções para completar o depósito",
     });
   }
@@ -564,7 +703,7 @@ async function handlePurchasePdf(req: Request): Promise<Response> {
     .select("id")
     .eq("user_id", user.id)
     .eq("product_id", productId)
-    .single();
+    .maybeSingle();
 
   if (existingPurchase) {
     return jsonResponse({ error: "Você já comprou este produto", already_purchased: true }, 400);
@@ -601,7 +740,7 @@ async function handlePurchasePdf(req: Request): Promise<Response> {
         quantity: 1,
       },
     ],
-    amount: 1,
+    amount: product.price,
   };
 
   const plinqpayResponse = await createPlinqPayReference(plinqpayPayload);
@@ -617,22 +756,32 @@ async function handlePurchasePdf(req: Request): Promise<Response> {
     }, 400);
   }
 
+  const reference = extractReference(plinqpayResponse.result);
+  if (!reference) {
+    await supabase
+      .from("transactions")
+      .update({ status: "failed", description: `Sem referência retornada: ${JSON.stringify(plinqpayResponse.result)}` })
+      .eq("id", transaction.id);
+
+    return jsonResponse({ error: "Não foi possível gerar referência de pagamento" }, 400);
+  }
+
   await supabase
     .from("transactions")
     .update({
-      description: `${transaction.description} - Ref: ${plinqpayResponse.result.reference || plinqpayResponse.result.id}`,
+      description: `${transaction.description} - Ref: ${reference}`,
     })
     .eq("id", transaction.id);
 
   return jsonResponse({
     success: true,
     transaction_id: transaction.id,
-    reference: plinqpayResponse.result.reference,
+    reference,
     entity: ENTITY_CODE,
     status: "pending",
     product_title: product.title,
     amount: product.price,
-    instructions: `Entidade: ${ENTITY_CODE}\nReferência: ${plinqpayResponse.result.reference || plinqpayResponse.result.id}\nValor: ${product.price.toLocaleString()} AOA\n\nPague via Multicaixa Express ou PayPay África.`,
+    instructions: `Entidade: ${ENTITY_CODE}\nReferência: ${reference}\nValor: ${product.price.toLocaleString()} AOA\n\nPague a referência para aprovar a compra.`,
   });
 }
 

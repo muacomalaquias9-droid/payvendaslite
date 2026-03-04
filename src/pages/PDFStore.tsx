@@ -50,7 +50,7 @@ interface PendingPurchase {
   status: string;
 }
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
 const ENTITY_CODE = "01055";
 
 interface PaymentWebhookResponse {
@@ -107,6 +107,50 @@ const PDFStore = () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [user, profile]);
+
+  useEffect(() => {
+    if (!pendingPurchase?.transactionId || !showPurchaseInfo || !user) return;
+
+    const channel = supabase
+      .channel(`purchase-status-${pendingPurchase.transactionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'transactions',
+          filter: `id=eq.${pendingPurchase.transactionId}`,
+        },
+        async (payload) => {
+          const status = (payload.new as { status?: string }).status;
+          if (!status || (status !== 'completed' && status !== 'failed')) return;
+
+          if (pollRef.current) clearInterval(pollRef.current);
+          setPendingPurchase((prev) => (prev ? { ...prev, status } : null));
+
+          if (status === 'completed') {
+            toast.success("Pagamento confirmado! Baixando PDF...");
+
+            const { data: statusData } = await supabase.functions.invoke('payment-webhook', {
+              body: { action: 'purchase-status', transaction_id: pendingPurchase.transactionId }
+            });
+
+            const parsed = (statusData || {}) as PaymentWebhookResponse;
+            if (parsed.file_url) {
+              downloadPDF(parsed.file_url, pendingPurchase.productTitle);
+            }
+            fetchProducts();
+          } else {
+            toast.error("Pagamento expirado ou cancelado");
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [pendingPurchase?.transactionId, pendingPurchase?.productTitle, showPurchaseInfo, user]);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -258,26 +302,26 @@ const PDFStore = () => {
     setShowLoadingSplash(true);
 
     try {
-      const { data: session } = await supabase.auth.getSession();
+      
       const phoneFormatted = clientPhone.replace(/\D/g, "");
       
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/payment-webhook/purchase-pdf`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.session?.access_token}`
-        },
-        body: JSON.stringify({
+      const { data: resultData, error } = await supabase.functions.invoke('payment-webhook', {
+        body: {
+          action: 'purchase-pdf',
           product_id: checkoutProduct.id,
           client_name: clientName.trim(),
           client_email: clientEmail.trim(),
           client_phone: phoneFormatted
-        })
+        }
       });
 
-      const result = await response.json();
+      if (error) {
+        throw new Error(error.message || "Erro ao processar compra");
+      }
 
-      if (!response.ok) {
+      const result = (resultData || {}) as PaymentWebhookResponse;
+
+      if (result.error) {
         if (result.already_purchased) {
           if (checkoutProduct.file_url) {
             downloadPDF(checkoutProduct.file_url, checkoutProduct.title);
@@ -286,6 +330,10 @@ const PDFStore = () => {
           return;
         }
         throw new Error(result.error || "Erro ao processar compra");
+      }
+
+      if (!result.transaction_id || !result.reference) {
+        throw new Error("Não foi possível gerar referência de pagamento");
       }
 
       setShowLoadingSplash(false);
@@ -310,15 +358,27 @@ const PDFStore = () => {
     }
   };
 
-  const downloadPDF = (url: string, title: string) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${title}.pdf`;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("Download iniciado!");
+  const downloadPDF = async (url: string, title: string) => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Arquivo indisponível");
+
+      const blob = await response.blob();
+      const fileBlob = new Blob([blob], { type: "application/pdf" });
+      const blobUrl = URL.createObjectURL(fileBlob);
+
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `${title}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+      toast.success("Download iniciado!");
+    } catch {
+      window.open(url, "_blank", "noopener,noreferrer");
+      toast.success("Pagamento confirmado! Abra o PDF no link exibido.");
+    }
   };
 
   const startPaymentPolling = (transactionId: string, product: PDFProduct) => {
@@ -327,14 +387,15 @@ const PDFStore = () => {
     pollRef.current = setInterval(async () => {
       setCheckingPayment(true);
       try {
-        const { data: session } = await supabase.auth.getSession();
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/payment-webhook/purchase-status/${transactionId}`, {
-          headers: {
-            'Authorization': `Bearer ${session?.session?.access_token}`
+        const { data: resultData, error } = await supabase.functions.invoke('payment-webhook', {
+          body: {
+            action: 'purchase-status',
+            transaction_id: transactionId,
           }
         });
 
-        const result = await response.json();
+        if (error) throw new Error(error.message || "Erro ao verificar status");
+        const result = (resultData || {}) as PaymentWebhookResponse;
 
         if (result.status === "completed") {
           if (pollRef.current) clearInterval(pollRef.current);
@@ -757,7 +818,7 @@ const PDFStore = () => {
 
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
                       <p className="text-amber-700 text-xs">
-                        {checkingPayment ? "⏳ Verificando pagamento..." : "⏳ Pague via Multicaixa Express ou PayPay África. O sistema verificará automaticamente."}
+                        {checkingPayment ? "⏳ Verificando pagamento..." : "⏳ Pague por referência PlinqPay. A aprovação será confirmada automaticamente."}
                       </p>
                     </div>
 

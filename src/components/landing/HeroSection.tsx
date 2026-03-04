@@ -65,8 +65,8 @@ export const HeroSection = () => {
               transition={{ duration: 0.6, delay: 0.2 }}
               className="text-lg md:text-xl text-muted-foreground mb-12 max-w-xl mx-auto lg:mx-0 leading-relaxed"
             >
-              Publique conteúdos digitais, receba pagamentos via Multicaixa Express 
-              e PayPay África. Tudo numa plataforma.
+              Publique conteúdos digitais e receba pagamentos por referência
+              com confirmação automática. Tudo numa plataforma.
             </motion.p>
 
             <motion.div

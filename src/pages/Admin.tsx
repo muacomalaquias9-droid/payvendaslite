@@ -106,7 +106,7 @@ const Admin = () => {
 
   useEffect(() => {
     if (!loading && (!user || !isAdmin)) {
-      navigate("/trading");
+      navigate("/loja");
     }
   }, [user, isAdmin, loading, navigate]);
 
@@ -377,7 +377,7 @@ const Admin = () => {
       <header className="sticky top-0 z-50 bg-[#0d1421]/95 backdrop-blur-xl border-b border-[#1e2a3a]">
         <div className="flex items-center justify-between h-14 px-4">
           <div className="flex items-center gap-3">
-            <Link to="/trading">
+            <Link to="/loja">
               <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white">
                 <ArrowLeft size={20} />
               </Button>

@@ -29,9 +29,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { BottomNavigation } from "@/components/navigation/BottomNavigation";
 import payvendasLogo from "@/assets/payvendas-logo.png";
-import paypayLogo from "@/assets/paypay-logo.webp";
-import multicaixaLogo from "@/assets/multicaixa-logo.webp";
-import pliqpagLogo from "@/assets/pliqpag-logo.png";
 
 interface Transaction {
   id: string;
@@ -43,10 +40,6 @@ interface Transaction {
   description: string | null;
 }
 
-const PAYMENT_METHODS = [
-  { id: 'multicaixa', name: 'Multicaixa Express', icon: multicaixaLogo, color: 'bg-orange-500/20' },
-  { id: 'paypay', name: 'PayPay África', icon: paypayLogo, color: 'bg-cyan-500/20' },
-];
 
 interface PaymentWebhookResponse {
   success?: boolean;
@@ -74,7 +67,7 @@ const Wallet = () => {
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentEntity, setPaymentEntity] = useState("01055");
   const [paymentAmount, setPaymentAmount] = useState(0);
-  const [selectedMethod, setSelectedMethod] = useState(PAYMENT_METHODS[0]);
+  
   const [amount, setAmount] = useState("");
   const [processing, setProcessing] = useState(false);
 
@@ -186,7 +179,7 @@ const Wallet = () => {
         action: 'initiate',
         type: 'deposit',
         amount: depositAmount,
-        method: selectedMethod.name,
+        method: 'PlinqPay REFERENCE',
         client_name: clientName.trim(),
         client_email: clientEmail.trim(),
         client_phone: phoneFormatted,
@@ -351,30 +344,15 @@ const Wallet = () => {
 
       <div>
         <Label className="text-sm text-muted-foreground block mb-2">
-          {isWithdraw ? 'Processamento' : 'Método de Pagamento'}
+          Método de Processamento
         </Label>
         {isWithdraw ? (
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-foreground">
             Levantamento manual por IBAN (processado pelo admin)
           </div>
         ) : (
-          <div className="space-y-2">
-            {PAYMENT_METHODS.map((method) => (
-              <button
-                key={method.id}
-                onClick={() => setSelectedMethod(method)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
-                  selectedMethod.id === method.id
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-primary/50'
-                }`}
-              >
-                <div className={`w-10 h-10 rounded-lg ${method.color} flex items-center justify-center p-1.5`}>
-                  <img src={method.icon} alt={method.name} className="w-full h-full object-contain" />
-                </div>
-                <span className="text-foreground font-medium">{method.name}</span>
-              </button>
-            ))}
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-foreground">
+            Pagamento por referência PlinqPay (Entidade 01055)
           </div>
         )}
       </div>
@@ -697,7 +675,7 @@ const Wallet = () => {
 
               <Button
                 onClick={handleWithdraw}
-                disabled={processing || !amount || !clientName || !clientEmail || !clientPhone}
+                disabled={processing || !amount || !clientName || !clientEmail || !clientIban}
                 className="w-full h-11 bg-amber-500 hover:bg-amber-600 text-white font-semibold shadow-md mt-4"
               >
                 Solicitar Levantamento
@@ -730,7 +708,7 @@ const Wallet = () => {
               
               <h3 className="font-bold text-lg text-foreground mb-2">Referência de Pagamento</h3>
               <p className="text-sm text-muted-foreground mb-5">
-                Pague via Multicaixa Express ou PayPay África com os dados abaixo:
+                Pague via referência PlinqPay com os dados abaixo:
               </p>
 
               <div className="space-y-3 bg-secondary rounded-xl p-4 text-left mb-5">
@@ -752,7 +730,7 @@ const Wallet = () => {
 
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
                 <p className="text-amber-700 text-xs">
-                  ⏳ Pendente - Após o pagamento no Multicaixa Express ou PayPay África, o saldo será creditado automaticamente.
+                  ⏳ Pendente - Após o pagamento por referência, o saldo será creditado automaticamente.
                 </p>
               </div>
 

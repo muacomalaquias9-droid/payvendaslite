@@ -8,8 +8,8 @@ import { useAuth } from "@/hooks/useAuth";
 
 const navLinks = [
   { href: "/loja", label: "Loja de PDFs" },
-  { href: "/trading", label: "Trading" },
   { href: "/carteira", label: "Carteira" },
+  { href: "/afiliados", label: "Afiliados" },
 ];
 
 export const Header = () => {
@@ -49,7 +49,7 @@ export const Header = () => {
               <div className="w-20 h-8 bg-secondary rounded-xl animate-pulse" />
             ) : user ? (
               <div className="flex items-center gap-3">
-                <Link to="/trading">
+                <Link to="/loja">
                   <Button 
                     size="sm"
                     className="liquid-glass text-foreground hover:bg-white/50 rounded-xl font-semibold border-0"
@@ -128,9 +128,9 @@ export const Header = () => {
               <div className="flex gap-2 mt-4 pt-4 border-t border-border/30">
                 {user ? (
                   <>
-                    <Link to="/trading" className="flex-1" onClick={() => setIsMenuOpen(false)}>
+                    <Link to="/loja" className="flex-1" onClick={() => setIsMenuOpen(false)}>
                       <Button className="w-full liquid-glass text-foreground hover:bg-white/40 border-0 rounded-xl">
-                        Dashboard
+                        Minha Loja
                       </Button>
                     </Link>
                     <Button 

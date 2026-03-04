@@ -20,7 +20,7 @@ const Login = () => {
     setLoading(true);
     try {
       await signIn(email, password);
-      navigate("/trading");
+      navigate("/loja");
     } catch (error) {
     } finally {
       setLoading(false);

@@ -11,9 +11,9 @@ export const Footer = () => {
           <div className="flex items-start gap-3 text-sm">
             <AlertTriangle size={18} className="text-destructive shrink-0 mt-0.5" />
             <p className="text-muted-foreground">
-              <span className="text-destructive font-bold">Aviso de Risco:</span>{" "}
-              O mercado financeiro envolve riscos significativos. A PayVendas não garante lucros. 
-              Todo conteúdo é educativo e não constitui aconselhamento financeiro.
+              <span className="text-destructive font-bold">Aviso:</span>{" "}
+              O mercado de infoprodutos exige responsabilidade na compra e venda.
+              Todo conteúdo é educativo e comercial, sem promessa de ganhos financeiros.
             </p>
           </div>
         </div>
@@ -35,8 +35,8 @@ export const Footer = () => {
             <ul className="space-y-2.5">
               {[
                 { to: "/loja", label: "Loja de PDFs" },
-                { to: "/trading", label: "Trading" },
                 { to: "/carteira", label: "Carteira Digital" },
+                { to: "/afiliados", label: "Programa de Afiliados" },
                 { to: "/chat", label: "Chat da Comunidade" },
               ].map(link => (
                 <li key={link.to}>
