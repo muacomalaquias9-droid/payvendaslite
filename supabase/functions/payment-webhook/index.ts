@@ -176,7 +176,7 @@ async function createPlinqPayReference(payload: {
         quantity: 1,
       },
     ],
-    amount: 1,
+    amount: payload.price,
   };
 
   console.log("PlinqPay request body:", JSON.stringify(body));
