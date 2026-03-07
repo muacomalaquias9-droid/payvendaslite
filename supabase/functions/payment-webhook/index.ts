@@ -75,6 +75,69 @@ function extractField(obj: any, ...keys: string[]): string {
   return "";
 }
 
+function uniquePlinqPayKeys(): string[] {
+  return Array.from(new Set([PLINQPAY_SECRET_KEY, PLINQPAY_PUBLIC_KEY, PLINQPAY_API_KEY].filter(Boolean)));
+}
+
+function safeJsonParse(raw: string): any {
+  try {
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return { message: raw || "Resposta inválida da PlinqPay" };
+  }
+}
+
+function extractReferenceFromResult(result: any, headers: Headers) {
+  const reference = [
+    extractField(result, "reference", "referencia", "payment_reference", "paymentReference", "ref"),
+    result?.payment?.reference,
+    result?.payment?.ref,
+    result?.transaction?.reference,
+    headers.get("x-reference"),
+    headers.get("reference"),
+  ].find((value) => typeof value === "string" && value.trim().length > 0) || "";
+
+  const entity = [
+    extractField(result, "entity", "entityCode", "entidade"),
+    result?.payment?.entity,
+    headers.get("x-entity"),
+  ].find((value) => typeof value === "string" && value.trim().length > 0) || ENTITY_CODE;
+
+  const plinqpayId = extractField(result, "id", "transactionId", "payment_id", "paymentId");
+
+  return {
+    reference: String(reference).trim(),
+    entity: String(entity).trim() || ENTITY_CODE,
+    plinqpayId: String(plinqpayId || "").trim(),
+  };
+}
+
+async function fetchPlinqPayTransactionDetails(transactionId: string, apiKey: string) {
+  try {
+    const response = await fetch(`${PLINQPAY_API_URL}/${encodeURIComponent(transactionId)}`, {
+      method: "GET",
+      headers: { "api-key": apiKey },
+    });
+
+    const raw = await response.text();
+    const result = safeJsonParse(raw);
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      result,
+      parsed: extractReferenceFromResult(result, response.headers),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 500,
+      result: { message: `Erro ao consultar transação PlinqPay: ${String(error)}` },
+      parsed: { reference: "", entity: ENTITY_CODE, plinqpayId: "" },
+    };
+  }
+}
+
 // Create PlinqPay reference - follows official docs exactly
 // Docs: POST https://api.plinqpay.com/v1/transaction
 // Header: api-key: PUBLIC_KEY
