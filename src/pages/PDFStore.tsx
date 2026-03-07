@@ -518,7 +518,7 @@ const PDFStore = () => {
                           {product.price.toLocaleString('pt-AO')} Kz
                         </div>
                         {isPurchased && (
-                          <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <div className="absolute top-2 left-2 bg-success text-success-foreground text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
                             <CheckCircle size={10} /> Comprado
                           </div>
                         )}
@@ -549,7 +549,7 @@ const PDFStore = () => {
                             onClick={() => handlePurchase(product)}
                             className={`w-full text-xs h-8 shadow-sm ${
                               isPurchased 
-                                ? 'bg-emerald-500 hover:bg-emerald-600 text-white' 
+                                ? 'bg-success hover:bg-success/90 text-success-foreground' 
                                 : 'bg-primary hover:bg-primary/90 text-primary-foreground'
                             }`}
                           >
