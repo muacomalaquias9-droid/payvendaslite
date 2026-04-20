@@ -12,9 +12,10 @@ export const DashboardLayout = ({ children, admin }: Props) => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
+  const ADMIN_PATH = "/mx-control-9f3a2b";
   const items = admin
     ? [
-        { to: "/admin", icon: LayoutDashboard, label: "Visão geral" },
+        { to: ADMIN_PATH, icon: LayoutDashboard, label: "Visão geral" },
       ]
     : [
         { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
@@ -27,7 +28,7 @@ export const DashboardLayout = ({ children, admin }: Props) => {
       {/* Sidebar desktop */}
       <aside className="hidden md:flex w-64 flex-col bg-background border-r border-border p-6 gap-6 sticky top-0 h-screen">
         <Link to="/" className="flex items-center gap-2">
-          <img src={logo} alt="MuacoX" className="h-10 w-auto" />
+          <img src={logo} alt="MuacoX" className="h-16 w-auto" />
         </Link>
         <nav className="flex flex-col gap-1 flex-1">
           {items.map(it => (
@@ -39,7 +40,7 @@ export const DashboardLayout = ({ children, admin }: Props) => {
             </Link>
           ))}
           {isAdmin && !admin && (
-            <Link to="/admin" className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-secondary text-primary">
+            <Link to={ADMIN_PATH} className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-secondary text-primary">
               <Shield className="h-4 w-4" />Área Admin
             </Link>
           )}
@@ -60,10 +61,10 @@ export const DashboardLayout = ({ children, admin }: Props) => {
 
       {/* Mobile top bar */}
       <header className="md:hidden sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border px-4 h-14 flex items-center justify-between">
-        <Link to="/"><img src={logo} alt="MuacoX" className="h-8 w-auto" /></Link>
+        <Link to="/"><img src={logo} alt="MuacoX" className="h-12 w-auto" /></Link>
         <div className="flex items-center gap-2">
           {isAdmin && !admin && (
-            <Link to="/admin"><Button size="sm" variant="outline" className="rounded-full"><Shield className="h-4 w-4" /></Button></Link>
+            <Link to={ADMIN_PATH}><Button size="sm" variant="outline" className="rounded-full"><Shield className="h-4 w-4" /></Button></Link>
           )}
           <Button size="sm" variant="ghost" onClick={handleSignOut}><LogOut className="h-4 w-4" /></Button>
         </div>
