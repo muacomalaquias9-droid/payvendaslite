@@ -96,7 +96,7 @@ export const ChatPanel = ({ conversationUserId, currentUserId, isAdmin, fullScre
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-secondary/30">
         {messages.length === 0 && (
           <div className="text-center text-muted-foreground text-sm py-10">
-            <p>👋 Olá! Envia-nos uma mensagem ou comprovativo de pagamento.</p>
+            <p>Olá — envia uma mensagem ou comprovativo de pagamento.</p>
           </div>
         )}
         <AnimatePresence initial={false}>
