@@ -117,7 +117,7 @@ const Dashboard = () => {
           </TabsContent>
 
           <TabsContent value="chat">
-            <ChatPanel conversationUserId={user.id} currentUserId={user.id} isAdmin={false} />
+            <ChatPanel conversationUserId={user.id} currentUserId={user.id} isAdmin={false} fullScreen />
           </TabsContent>
         </Tabs>
       </div>
