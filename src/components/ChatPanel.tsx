@@ -20,9 +20,10 @@ interface Props {
   conversationUserId: string;
   currentUserId: string;
   isAdmin: boolean;
+  fullScreen?: boolean;
 }
 
-export const ChatPanel = ({ conversationUserId, currentUserId, isAdmin }: Props) => {
+export const ChatPanel = ({ conversationUserId, currentUserId, isAdmin, fullScreen }: Props) => {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
