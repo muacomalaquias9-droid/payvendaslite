@@ -1,6 +1,6 @@
 export const SITE = {
   name: "MuacoX",
-  tagline: "Criamos história que inovam",
+  tagline: "Estúdio digital premium",
   description: "Sites profissionais, hospedagem e flyers premium em Angola.",
   founder: "Isaac Muaco",
   email: "isaacmuaco528@gmail.com",
