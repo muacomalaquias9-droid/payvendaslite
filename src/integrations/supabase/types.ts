@@ -158,12 +158,15 @@ export type Database = {
           customer_name: string
           customer_phone: string
           id: string
+          invoice_number: string | null
+          invoice_url: string | null
           notes: string | null
           paid_at: string | null
           payment_entity: string | null
           payment_method: string | null
           payment_reference: string | null
           plan_id: string | null
+          service_type: string | null
           status: string
           updated_at: string | null
           user_id: string | null
@@ -176,12 +179,15 @@ export type Database = {
           customer_name: string
           customer_phone: string
           id?: string
+          invoice_number?: string | null
+          invoice_url?: string | null
           notes?: string | null
           paid_at?: string | null
           payment_entity?: string | null
           payment_method?: string | null
           payment_reference?: string | null
           plan_id?: string | null
+          service_type?: string | null
           status?: string
           updated_at?: string | null
           user_id?: string | null
@@ -194,12 +200,15 @@ export type Database = {
           customer_name?: string
           customer_phone?: string
           id?: string
+          invoice_number?: string | null
+          invoice_url?: string | null
           notes?: string | null
           paid_at?: string | null
           payment_entity?: string | null
           payment_method?: string | null
           payment_reference?: string | null
           plan_id?: string | null
+          service_type?: string | null
           status?: string
           updated_at?: string | null
           user_id?: string | null
@@ -263,29 +272,35 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address: string | null
           avatar_url: string | null
           created_at: string | null
           full_name: string | null
           id: string
           phone: string | null
+          tax_id: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
+          address?: string | null
           avatar_url?: string | null
           created_at?: string | null
           full_name?: string | null
           id?: string
           phone?: string | null
+          tax_id?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
+          address?: string | null
           avatar_url?: string | null
           created_at?: string | null
           full_name?: string | null
           id?: string
           phone?: string | null
+          tax_id?: string | null
           updated_at?: string | null
           user_id?: string
         }
