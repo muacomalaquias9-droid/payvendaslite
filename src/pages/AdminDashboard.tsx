@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import {
   TrendingUp, DollarSign, Users, ShoppingBag, CheckCircle2, XCircle,
   MessageCircle, Receipt, Package, Image as ImageIcon, Bell, Plus,
-  Trash2, Edit3, Send, LayoutDashboard, FileBadge, Loader2, Download
+  Trash2, Edit3, Send, LayoutDashboard, FileBadge, Loader2, Download, Star, Quote
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ interface Conv { user_id: string; full_name: string | null; avatar_url: string |
 interface Plan { id: string; name: string; category: string; price: number; description: string; features: any; active: boolean; highlighted: boolean; billing_cycle: string; display_order: number; }
 interface Flyer { id: string; title: string; image_url: string; category: string | null; description: string | null; active: boolean; display_order: number; }
 interface Profile { user_id: string; full_name: string | null; phone: string | null; avatar_url: string | null; created_at: string; }
+interface Testimonial { id: string; author_name: string; message: string; rating: number; photo_url: string | null; approved: boolean; created_at: string; }
 
 const COLORS = ["hsl(230 100% 50%)", "hsl(38 92% 50%)", "hsl(142 76% 36%)", "hsl(0 84% 60%)"];
 
@@ -46,6 +47,7 @@ const AdminDashboard = () => {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [flyers, setFlyers] = useState<Flyer[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [activeChat, setActiveChat] = useState<string | null>(null);
 
   useEffect(() => {
@@ -58,19 +60,21 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (!isAdmin) return;
     const load = async () => {
-      const [{ data: o }, { data: p }, { data: msgs }, { data: pl }, { data: fl }, { data: pr }] = await Promise.all([
+      const [{ data: o }, { data: p }, { data: msgs }, { data: pl }, { data: fl }, { data: pr }, { data: ts }] = await Promise.all([
         supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(500),
         supabase.from("payment_proofs").select("*").order("created_at", { ascending: false }).limit(200),
         supabase.from("messages").select("conversation_user_id, body, created_at, is_admin_sender").order("created_at", { ascending: false }).limit(500),
         supabase.from("service_plans").select("*").order("display_order"),
         supabase.from("flyer_gallery").select("*").order("display_order"),
         supabase.from("profiles").select("user_id, full_name, phone, avatar_url, created_at").order("created_at", { ascending: false }),
+        supabase.from("testimonials").select("*").order("created_at", { ascending: false }).limit(200),
       ]);
       if (o) setOrders(o as Order[]);
       if (p) setProofs(p as Proof[]);
       if (pl) setPlans(pl as any);
       if (fl) setFlyers(fl as Flyer[]);
       if (pr) setProfiles(pr as Profile[]);
+      if (ts) setTestimonials(ts as Testimonial[]);
       if (msgs) {
         const map = new Map<string, Conv>();
         (msgs as any[]).forEach(m => {
@@ -95,6 +99,7 @@ const AdminDashboard = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "payment_proofs" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "service_plans" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "flyer_gallery" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "testimonials" }, load)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
