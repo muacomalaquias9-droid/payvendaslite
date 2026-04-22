@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import {
   TrendingUp, DollarSign, Users, ShoppingBag, CheckCircle2, XCircle,
   MessageCircle, Receipt, Package, Image as ImageIcon, Bell, Plus,
-  Trash2, Edit3, Send, LayoutDashboard
+  Trash2, Edit3, Send, LayoutDashboard, FileBadge, Loader2, Download
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ interface Order {
   id: string; user_id: string | null; customer_name: string; customer_email: string;
   customer_phone: string; amount: number; status: string; notes: string | null;
   plan_id: string | null; created_at: string;
+  invoice_url?: string | null; invoice_number?: string | null; service_type?: string | null;
 }
 interface Proof { id: string; user_id: string; order_id: string | null; image_url: string; amount: number | null; status: string; created_at: string; notes: string | null; }
 interface Conv { user_id: string; full_name: string | null; avatar_url: string | null; last: string; unread: number; }
@@ -118,11 +119,28 @@ const AdminDashboard = () => {
     { name: "Concluído", value: orders.filter(o => o.status === "completed").length },
   ].filter(d => d.value > 0);
 
+  const generateInvoice = async (orderId: string) => {
+    toast.loading("A gerar factura…", { id: `inv-${orderId}` });
+    const { data, error } = await supabase.functions.invoke("generate-invoice", { body: { order_id: orderId } });
+    if (error || (data as any)?.error) {
+      toast.error((data as any)?.error || error?.message || "Erro ao gerar factura", { id: `inv-${orderId}` });
+      return null;
+    }
+    toast.success("Factura gerada!", { id: `inv-${orderId}` });
+    return (data as any)?.url as string;
+  };
+
   const updateOrderStatus = async (id: string, status: string) => {
     const patch: any = { status };
     if (status === "paid") patch.paid_at = new Date().toISOString();
     const { error } = await supabase.from("orders").update(patch).eq("id", id);
-    if (error) toast.error(error.message); else toast.success("Pedido actualizado");
+    if (error) { toast.error(error.message); return; }
+    toast.success("Pedido actualizado");
+    // Auto-generate invoice when marking as paid
+    if (status === "paid") {
+      const order = orders.find(o => o.id === id);
+      if (order && !order.invoice_url) await generateInvoice(id);
+    }
   };
 
   const reviewProof = async (id: string, status: "approved" | "rejected", orderId?: string | null) => {
@@ -219,26 +237,48 @@ const AdminDashboard = () => {
           {/* 2. PEDIDOS */}
           <TabsContent value="orders">
             <div className="grid gap-3">
-              {orders.map(o => (
-                <div key={o.id} className="bg-background rounded-2xl border border-border p-4 flex flex-wrap gap-3 items-center justify-between">
-                  <div className="min-w-0">
-                    <p className="font-bold">{o.customer_name}</p>
-                    <p className="text-xs text-muted-foreground">{o.customer_email} · {o.customer_phone}</p>
-                    {o.notes && <p className="text-xs mt-1 line-clamp-1 max-w-md">{o.notes}</p>}
+              {orders.map(o => {
+                const plan = plans.find(p => p.id === o.plan_id);
+                return (
+                  <div key={o.id} className="bg-background rounded-2xl border border-border p-4 flex flex-wrap gap-3 items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold">{o.customer_name}</p>
+                        {plan && (
+                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                            {plan.category} · {plan.name}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{o.customer_email} · {o.customer_phone}</p>
+                      {o.notes && <p className="text-xs mt-1 line-clamp-1 max-w-md">{o.notes}</p>}
+                      {o.invoice_url && (
+                        <a href={o.invoice_url} target="_blank" rel="noopener"
+                          className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold text-success hover:underline">
+                          <FileBadge className="h-3.5 w-3.5" />Factura {o.invoice_number}
+                          <Download className="h-3 w-3" />
+                        </a>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-bold">{formatKz(o.amount)}</p>
+                      <select value={o.status} onChange={e => updateOrderStatus(o.id, e.target.value)}
+                        className="h-9 rounded-lg border border-input bg-background px-2 text-xs font-semibold">
+                        <option value="pending">Pendente</option>
+                        <option value="paid">Pago</option>
+                        <option value="in_progress">Em curso</option>
+                        <option value="completed">Concluído</option>
+                        <option value="cancelled">Cancelado</option>
+                      </select>
+                      {(o.status === "paid" || o.status === "completed") && !o.invoice_url && (
+                        <Button size="sm" onClick={() => generateInvoice(o.id)} className="rounded-lg bg-success text-white hover:bg-success/90 h-9">
+                          <FileBadge className="h-3.5 w-3.5 mr-1" />Gerar factura
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-bold">{formatKz(o.amount)}</p>
-                    <select value={o.status} onChange={e => updateOrderStatus(o.id, e.target.value)}
-                      className="h-9 rounded-lg border border-input bg-background px-2 text-xs font-semibold">
-                      <option value="pending">Pendente</option>
-                      <option value="paid">Pago</option>
-                      <option value="in_progress">Em curso</option>
-                      <option value="completed">Concluído</option>
-                      <option value="cancelled">Cancelado</option>
-                    </select>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {orders.length === 0 && <p className="text-center text-muted-foreground py-10">Sem pedidos.</p>}
             </div>
           </TabsContent>
