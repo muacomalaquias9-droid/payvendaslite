@@ -125,10 +125,10 @@ const Dashboard = () => {
                       {o.notes && <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{o.notes}</p>}
                       {o.invoice_url && (
                         <a href={o.invoice_url} target="_blank" rel="noopener"
-                          className="flex items-center gap-2 mb-3 text-xs font-semibold bg-success/10 text-success px-3 py-2 rounded-xl hover:bg-success/15 transition">
-                          <FileBadge className="h-4 w-4" />
-                          Factura {o.invoice_number || "disponível"}
-                          <Download className="h-3 w-3 ml-auto" />
+                          className="flex items-center gap-2 mb-3 text-xs font-bold bg-success/10 text-success px-3 py-2.5 rounded-xl hover:bg-success/20 transition border border-success/20">
+                          <FileBadge className="h-4 w-4 shrink-0" />
+                          <span className="flex-1 truncate">Factura <span className="font-mono">{o.invoice_number || "disponível"}</span></span>
+                          <Download className="h-3.5 w-3.5 shrink-0" />
                         </a>
                       )}
                       <div className="flex items-center justify-between flex-wrap gap-2">
