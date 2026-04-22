@@ -166,7 +166,7 @@ const AdminDashboard = () => {
         </motion.div>
 
         <Tabs defaultValue="overview" className="space-y-5">
-          <TabsList className="rounded-2xl h-auto p-1.5 grid grid-cols-4 md:flex md:flex-wrap gap-1 bg-secondary">
+          <TabsList className="rounded-2xl h-auto p-1.5 grid grid-cols-3 md:flex md:flex-wrap gap-1 bg-secondary">
             <Tab value="overview" icon={LayoutDashboard} label="Visão" />
             <Tab value="orders" icon={ShoppingBag} label="Pedidos" badge={orders.filter(o=>o.status==="pending").length} />
             <Tab value="proofs" icon={Receipt} label="Pagamentos" badge={proofsPending} />
@@ -174,6 +174,7 @@ const AdminDashboard = () => {
             <Tab value="customers" icon={Users} label="Clientes" />
             <Tab value="plans" icon={Package} label="Planos" />
             <Tab value="gallery" icon={ImageIcon} label="Galeria" />
+            <Tab value="testimonials" icon={Quote} label="Depoimentos" badge={testimonials.filter(t=>!t.approved).length} />
             <Tab value="notify" icon={Bell} label="Avisos" />
           </TabsList>
 
@@ -373,7 +374,12 @@ const AdminDashboard = () => {
             <GalleryTab flyers={flyers} userId={user!.id} />
           </TabsContent>
 
-          {/* 8. NOTIFICAÇÕES BROADCAST */}
+          {/* 8. DEPOIMENTOS — moderação */}
+          <TabsContent value="testimonials">
+            <TestimonialsAdminTab items={testimonials} />
+          </TabsContent>
+
+          {/* 9. NOTIFICAÇÕES BROADCAST */}
           <TabsContent value="notify">
             <BroadcastTab profiles={profiles} />
           </TabsContent>
